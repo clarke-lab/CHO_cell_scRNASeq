@@ -2,6 +2,10 @@
 title: "CHOK1 DP12 cell line scRNASeq"
 author: Clarke Lab. NIBRT
 output:
+  html_document:
+    df_print: paged
+    toc: yes
+    toc_float: yes
   html_notebook: 
     df_print: paged
     smooth_scroll: yes
@@ -14,10 +18,6 @@ output:
     fig_caption: yes
     fig_width: 5
     fig_height: 5
-  html_document:
-    df_print: paged
-    toc: yes
-    toc_float: yes
   pdf_document:
     toc: yes
 ---
@@ -992,6 +992,10 @@ fig3.d
 
 ## HC cluster expression
 ```{r}
+pData(cells.filter) %>%
+  group_by(Cluster) %>%
+  summarise(median(rel.exprs.hc))
+
 fig.box.hc.cluster <- pData(cells.filter) %>%
   group_by(Cluster) %>% 
   ggplot(aes(x=Cluster, y = rel.exprs.hc,fill=Cluster)) +
@@ -1005,6 +1009,13 @@ fig.box.hc.cluster <- pData(cells.filter) %>%
         plot.title = element_text(size = rel(1.5))
   ) +
   labs(y="Relative expression",x="Cluster", title="Heavy Chain") +
+  stat_compare_means(method = "kruskal.test")+
+   stat_compare_means(
+     label = "p.signif",
+   method = "t.test",
+     ref.group = "5",
+     hide.ns = TRUE
+   ) +
   scale_fill_jcolors("pal8")
 
 fig.3f <- fig.box.hc.cluster
@@ -1034,6 +1045,10 @@ fig3.d
 ```
 ## HC cluster expression
 ```{r}
+pData(cells.filter) %>%
+  group_by(Cluster) %>%
+  summarise(median(rel.exprs.lc))
+
 fig.box.lc.cluster <- pData(cells.filter) %>%
   group_by(Cluster) %>% 
   ggplot(aes(x=Cluster, y = rel.exprs.lc,fill=Cluster)) +
@@ -1048,6 +1063,7 @@ fig.box.lc.cluster <- pData(cells.filter) %>%
         plot.title = element_text(size = rel(1.5))
   ) +
   labs(y="Relative expression",x="State", title="Light Chain") +
+  stat_compare_means(method = "kruskal.test") +
   scale_fill_jcolors("pal8")  
 
 fig3.g <- fig.box.lc.cluster
