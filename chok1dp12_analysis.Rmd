@@ -465,9 +465,9 @@ fig.total.mRNA <- ggplot(data = pData(cells)$totalmRNAs, aes(pData(cells)$total.
   ylab("Number of cells") +
   theme_ms() +
   theme(
-    aspect.ratio = 1,
+  
     axis.text = element_text(size = rel(1)),
-    axis.title = element_text(face = "bold", size = rel(1.5))
+    axis.title = element_text(face = "bold", size = rel(1))
   )
 
 fig1.b <- fig.total.mRNA
@@ -503,7 +503,7 @@ fig.mtDNA.frac <- pData(cells) %>%
     "rep3" = "Rep 3", "rep4" = "Rep 4"
   )) +
   theme_ms() +
-  theme(aspect.ratio = 1, legend.position = "none", axis.text = element_text(size = rel(1)), axis.title = element_text(face = "bold", size = rel(1.5))) +
+  theme(legend.position = "none", axis.text = element_text(size = rel(1)), axis.title = element_text(face = "bold", size = rel(1))) +
   scale_fill_jcolors("pal3")
 
 fig1.c <- fig.mtDNA.frac
@@ -547,11 +547,11 @@ fig.cells.removed <- ggplot(data = qc_df, aes(x = Var1, y = value)) +
     "rep3" = "Rep 3", "rep4" = "Rep 4"
   )) +
   theme_ms() +
-  theme(aspect.ratio = 1, legend.position = "none", axis.text = element_text(size = rel(1)), axis.title = element_text(face = "bold", size = rel(1.5))) +
+  theme(legend.position = "none", axis.text = element_text(size = rel(1)), axis.title = element_text(face = "bold", size = rel(1))) +
   theme(
     legend.title = element_blank(),
-    legend.position = (c(.75, .94)),
-    legend.text = element_text(size = 14)
+    legend.position = (c(.75, .94))
+    #legend.text = element_text(size = 12)
   ) +
   scale_fill_manual(values = c("#3CA437", "#D7263D"), labels = c("Passed", "Removed"))
 
@@ -593,15 +593,32 @@ fig.genes.expression <- ggplot(data = pData(cells)$num_genes_expressed, aes(pDat
   xlab("Detected genes") +
   ylab("Number of cells") +
   theme(
-    aspect.ratio = 1, legend.position = "none",
+     legend.position = "none",
     axis.text = element_text(size = rel(1)),
-    axis.title = element_text(face = "bold", size = rel(1.5))
+    axis.title = element_text(face = "bold", size = rel(1))
   )
 
 fig1.e <- fig.genes.expression
 saveManuscriptPlot(fig1.e, 6, 6)
 fig1.e
 ```
+### Figure 1
+
+```{r fig.height=6, fig.width=10}
+
+
+p1 <- (ggplot() + theme_void() + labs(tag="(a)"))/ (ggplot() + theme_void())
+p2 <- (ggplot() + theme_void()) / (ggplot() + theme_void())
+p3 <- (fig1.b + labs(tag="(b)")) / (fig1.d + labs(tag="(d)"))  
+p4 <- (fig1.c + labs(tag="(c)")) /  (fig1.e + labs(tag="(e)")) 
+
+figure1 <- p1 | p2 | p3 | p4
+#figure1 <- figure1 + plot_annotation(tag_levels = 'a',tag_prefix = "(", tag_suffix = ")") 
+# + plot_annotation(tag_levels = 'a',tag_prefix = "(", tag_suffix = ")") 
+saveManuscriptPlot(figure1, 12, 8)
+```
+
+
 ## Gene annotation 
 The SBG platform utilises the ENSEMBL GTF file for the PICR genome. To improve the annotation of the genes we utlise the corresponding Entrez IDs for those genes labelled with and "ENSCGRG" IDs to obtain a gene symbol
 ```{r ensembl_annotation}
@@ -734,7 +751,7 @@ fig.variable.genes <- plot_ordering_genes(cells.filter) +
   theme(
     aspect.ratio = 1,
     axis.text = element_text(size = rel(1)),
-    axis.title = element_text(face = "bold", size = rel(1.5))
+    axis.title = element_text(face = "bold", size = rel(1))
   )
 
 fig2.a <- fig.variable.genes
@@ -747,7 +764,7 @@ fig.pc.variance <- plot_pc_variance_explained(cells.filter, return_all = FALSE) 
   geom_vline(xintercept = 12, linetype = "dashed", color = "red", size = 0.5) +
   labs(x = "Principal Component", y = "Variance Explained") +
   theme_ms() +
-  theme(aspect.ratio = 1, axis.text = element_text(size = rel(1)), axis.title = element_text(face = "bold", size = rel(1.5)))
+  theme(aspect.ratio = 1, axis.text = element_text(size = rel(1)), axis.title = element_text(face = "bold", size = rel(1)))
 
 fig2.b <- fig.pc.variance
 saveManuscriptPlot(fig2.b, 6, 6)
@@ -844,14 +861,15 @@ df <- data.frame(
 )
 
 fig.tsne.density <- ggplot(df) +
-  geom_point(aes(x, y, col = d), size = 0.8) +
+  geom_point(aes(x, y, col = d), size = 0.2) +
   scale_color_identity() +
   theme_ms() +
   theme(
+    aspect.ratio = 1,
     panel.grid.major = element_blank(),
     panel.grid.minor = element_blank(),
     axis.text = element_text(size = rel(1)),
-    axis.title = element_text(face = "bold", size = rel(1.5))
+    axis.title = element_text(face = "bold", size = rel(1))
   ) +
   scale_y_continuous(limits = c(-35, 35)) +
   scale_x_continuous(limits = c(-35, 35)) +
@@ -866,7 +884,7 @@ fig2.c
 To identify groups  of cells form the tSNE plot we use the louvain method in
 monocle with K=100. Each cluster is assinged a color for reference.
 ```{r cluster_identification, fig.align="center", fig.cap="Figure", fig.height=5, fig.width=5}
-fig.tsne.cluster <- plot_cell_clusters(cells.filter, color = "Cluster", cell_size = 0.8) +
+fig.tsne.cluster <- plot_cell_clusters(cells.filter, color = "Cluster", cell_size = 0.5) +
   scale_y_continuous(limits = c(-35, 35)) +
   scale_x_continuous(limits = c(-35, 35)) +
   labs(x = "t-SNE 1", y = "t-SNE 2") +
@@ -876,7 +894,7 @@ fig.tsne.cluster <- plot_cell_clusters(cells.filter, color = "Cluster", cell_siz
     legend.position = "none",
     aspect.ratio = 1,
     axis.text = element_text(size = rel(1)),
-    axis.title = element_text(face = "bold", size = rel(1.5))
+    axis.title = element_text(face = "bold", size = rel(1))
   ) +
   scale_color_jcolors("pal8")
 
@@ -884,6 +902,29 @@ fig2.d <- fig.tsne.cluster
 saveManuscriptPlot(fig2.d, 6, 6)
 
 fig2.d
+```
+### Figure 2 
+```{r}
+figure2 <- (fig2.a | fig2.b) / (fig2.c | fig2.d) + 
+  plot_annotation(tag_levels = "a", tag_prefix = "(", tag_suffix = ")")
+saveManuscriptPlot(figure2, 9, 9)
+
+```
+
+
+## Differential expression
+Using Monocle's differential gene test the genes that differ between the
+clusters of cells are identified. We again regress out confounding factors i.e.
+batch and cell cycle phase
+```{r monocle_cluster_differential_expression, message=TRUE, warning=FALSE}
+# monocle differential expression by cluster
+tictoc::tic()
+cluster_de <- differentialGeneTest(cells.filter,
+  fullModelFormulaStr = "~batch + num_genes_expressed + total.mRNAs + S.Score + G2M.Score + Cluster",
+  reducedModelFormulaStr = "~batch + num_genes_expressed + total.mRNAs + S.Score + G2M.Score",
+  cores = 32
+)
+tictoc::toc()
 ```
 
 # Anti-IL8 mAb gene expression
@@ -958,7 +999,7 @@ fig.violin.mab <- ggplot(aes_string(x = "Gene", y = "expression", fill = "Gene")
     legend.position = "none",
     aspect.ratio = 1,
     axis.text = element_text(size = rel(1)),
-    axis.title = element_text(face = "bold", size = rel(1.5))
+    axis.title = element_text(face = "bold", size = rel(1))
   ) +
   labs(y = "Relative expression", x = "") +
   stat_compare_means(method = "wilcox.test", label.x = 0.75)
@@ -969,7 +1010,7 @@ fig3.b
 
 ## HC tSNE
 ```{r}
-fig.tsne.rel.hc <- plot_cell_clusters(cells.filter, color = "rel.exprs.hc", cell_size = 0.8) +
+fig.tsne.rel.hc <- plot_cell_clusters(cells.filter, color = "rel.exprs.hc", cell_size = 0.5) +
   color.gradient +
   theme_ms() +
   theme(
@@ -978,8 +1019,8 @@ fig.tsne.rel.hc <- plot_cell_clusters(cells.filter, color = "rel.exprs.hc", cell
     legend.position = "right",
     aspect.ratio = 1,
     axis.text = element_text(size = rel(1)),
-    axis.title = element_text(face = "bold", size = rel(1.5)),
-    plot.title = element_text(face = "bold", size = rel(1.5))
+    axis.title = element_text(face = "bold", size = rel(1)),
+    plot.title = element_text(face = "bold", size = rel(1))
   ) +
   scale_y_continuous(limits = c(-35, 35)) +
   scale_x_continuous(limits = c(-35, 35)) +
@@ -994,99 +1035,120 @@ fig3.d
 ```{r}
 pData(cells.filter) %>%
   group_by(Cluster) %>%
-  summarise(median(rel.exprs.hc))
+  summarise(`Cell number` = n(), `Median relative HC expression` = median(rel.exprs.hc), `Max. expression` = max(rel.exprs.hc)) %>%
+  DT::datatable(rownames = T,
+  options = list(
+    pagelength = T,
+    scrollX = T,
+    columnDefs = list(list(
+      className = "dt-head-center dt-center",
+      targets = 1:2
+    ))
+  )
+) %>% formatSignif(digits = 2, columns = 3:4)
+
+print(paste("Heavy chain DE q-value for cluster = ",signif(cluster_de["heavy_chain",]$qval,2)),sep="")
+
 
 fig.box.hc.cluster <- pData(cells.filter) %>%
   group_by(Cluster) %>% 
   ggplot(aes(x=Cluster, y = rel.exprs.hc,fill=Cluster)) +
   geom_violin(alpha=0.2) +
-  geom_boxplot(alpha=1, width=0.2) +
-  scale_y_log10() +
+  geom_boxplot(alpha=0.5, width=0.2) +
+  scale_y_log10(limits = c(0.5,1e2)) +
   theme_ms() + 
   theme(legend.position = "none", 
+        #aspect.ratio = 1, 
         axis.text = element_text(size = rel(1)), 
-        axis.title = element_text(face = "bold", size = rel(1.5)),
-        plot.title = element_text(size = rel(1.5))
+        axis.title = element_text(face = "bold", size = rel(1)),
+        plot.title = element_text(size = rel(1))
   ) +
   labs(y="Relative expression",x="Cluster", title="Heavy Chain") +
-  stat_compare_means(method = "kruskal.test")+
-   stat_compare_means(
-     label = "p.signif",
-   method = "t.test",
-     ref.group = "5",
-     hide.ns = TRUE
-   ) +
-  scale_fill_jcolors("pal8")
+  scale_fill_jcolors("pal8")  +
+  annotate("text",x="2",y=75, label=expression("DE q-value = "*1.6*" \u00D7 "*10^{-53})) 
 
-fig.3f <- fig.box.hc.cluster
-saveManuscriptPlot(fig.3f, 6, 3)
-fig.3f
+fig3.f <- fig.box.hc.cluster
+saveManuscriptPlot(fig3.f, 6, 3)
+fig3.f
 ```
 
 ## LC tSNE
 ```{r}
-fig.tsne.rel.lc <- plot_cell_clusters(cells.filter, color = "rel.exprs.lc", cell_size = 0.8) + color.gradient + theme_ms() +
+fig.tsne.rel.lc <- plot_cell_clusters(cells.filter, color = "rel.exprs.lc", cell_size = 0.5) + 
+ 
+  color.gradient + 
+  theme_ms() +
   theme(
     panel.grid.major = element_blank(),
     panel.grid.minor = element_blank(),
     legend.position = "right",
     aspect.ratio = 1,
     axis.text = element_text(size = rel(1)),
-    axis.title = element_text(face = "bold", size = rel(1.5)),
-    plot.title = element_text(face = "bold", size = rel(1.5))
+    axis.title = element_text(face = "bold", size = rel(1)),
+    plot.title = element_text(face = "bold", size = rel(1))
   ) +
   scale_y_continuous(limits = c(-35, 35)) +
   scale_x_continuous(limits = c(-35, 35)) +
   labs(x = "t-SNE 1", y = "t-SNE 2") +
   labs(x = "t-SNE 1", y = "t-SNE 2", color = "Relative\nExpression", title = "Light Chain")
-fig3.d <- fig.tsne.rel.lc
-saveManuscriptPlot(fig3.d, 6, 6)
-fig3.d
+fig3.e <- fig.tsne.rel.lc
+saveManuscriptPlot(fig3.e, 6, 6)
+fig3.e
 ```
 ## HC cluster expression
 ```{r}
 pData(cells.filter) %>%
   group_by(Cluster) %>%
-  summarise(median(rel.exprs.lc))
+  summarise(`Cell number` = n(), `Median relative LC expression` = median(rel.exprs.lc), `Max. expression` = max(rel.exprs.lc)) %>%
+  DT::datatable(rownames = T,
+  options = list(
+    pagelength = T,
+    scrollX = T,
+    columnDefs = list(list(
+      className = "dt-head-center dt-center",
+      targets = 1:2
+    ))
+  )
+) %>% formatSignif(digits = 2, columns = 3:4)
+
+print(paste("Light chain DE q-values for cluster = ",signif(cluster_de["light_chain",]$qval,2)),sep="")
+
 
 fig.box.lc.cluster <- pData(cells.filter) %>%
   group_by(Cluster) %>% 
   ggplot(aes(x=Cluster, y = rel.exprs.lc,fill=Cluster)) +
   geom_violin(alpha=0.2) +
-  geom_boxplot(alpha=1, width=0.2) +
-  scale_y_log10() +
+  geom_boxplot(alpha=0.5, width=0.2) +
+  scale_y_log10(limits = c(0.5,1e2)) +
   theme_ms() + 
   theme(legend.position = "none", 
         #aspect.ratio = 1, 
         axis.text = element_text(size = rel(1)), 
-        axis.title = element_text(face = "bold", size = rel(1.5)),
-        plot.title = element_text(size = rel(1.5))
+        axis.title = element_text(face = "bold", size = rel(1)),
+        plot.title = element_text(size = rel(1))
   ) +
-  labs(y="Relative expression",x="State", title="Light Chain") +
-  stat_compare_means(method = "kruskal.test") +
-  scale_fill_jcolors("pal8")  
+  labs(y="Relative expression",x="Cluster", title="Light Chain") +
+  scale_fill_jcolors("pal8")  +
+  annotate("text",x="2",y=75, label=expression("DE q-value = "*1.3*" \u00D7 "*10^{-36})) 
 
 fig3.g <- fig.box.lc.cluster
-saveManuscriptPlot(fig3.g, 6, 6)
+saveManuscriptPlot(fig3.g, 6, 3)
 fig3.g
 ```
 
-# Trajectory analysis
+### Figure 3
+```{r fig.height=9, fig.width=9}
+p1 <- ggplot() + theme_void() | fig3.b | fig2.d  + theme(legend.position = "right")
+p2 <- fig3.f/ fig3.g
+  
+p3 <-  fig3.d +theme(legend.position = "bottom") | fig3.e +theme(legend.position = "bottom") | p2 
 
-## Differential expression
-Using Monocle's differential gene test the genes that differ between the
-clusters of cells are identified. We again regress out confounding factors i.e.
-batch and cell cycle phase
-```{r monocle_cluster_differential_expression, message=TRUE, warning=FALSE}
-# monocle differential expression by cluster
-tictoc::tic()
-cluster_de <- differentialGeneTest(cells.filter,
-  fullModelFormulaStr = "~batch + num_genes_expressed + total.mRNAs + S.Score + G2M.Score + Cluster",
-  reducedModelFormulaStr = "~batch + num_genes_expressed + total.mRNAs + S.Score + G2M.Score",
-  cores = 32
-)
-tictoc::toc()
+figure3 <- p1 / p3 + plot_annotation(tag_levels = "a", tag_prefix = "(", tag_suffix = ")")
+saveManuscriptPlot(figure3,16,9)
 ```
+
+
+# Trajectory analysis
 ## Construct trajectory 
 using the genes found to vary beteen the identified clusters we first project
 onto a 2D space using the DDRTree algorithm before ording the cells in
@@ -1125,7 +1187,7 @@ fig.trajectory.state <- plot_cell_trajectory(cells.filter,
   show_branch_points = FALSE,
   color_by = "State",
   cell_size = 0.5) +
-  labs(x = "Component 1", y = "Component 2") +
+  labs(x = "Component 1", y = "Component 2", title="Monocle trajectory") +
   guides(color = guide_legend(override.aes = list(size = 5))) +
   theme_ms() +
   scale_x_reverse() + # we reverse the direction of the x-axis so that State 1 is at the left
@@ -1133,15 +1195,15 @@ fig.trajectory.state <- plot_cell_trajectory(cells.filter,
   scale_alpha(pData(cells.filter)$State) +
   theme(
     axis.text = element_text(size = rel(1)),
-    axis.title = element_text(face = "bold", size = rel(1.5))
+    axis.title = element_text(face = "bold", size = rel(1))
   )
 
 # modify the transperancy of the cells on the plot
-fig.trajectory.state <- ggplot_build(fig.trajectory.state)
-fig.trajectory.state$data[[2]]$alpha <- 0.3
-
-fig.trajectory.state <- ggplot_gtable(fig.trajectory.state)
-fig5.a <- as.ggplot(fig.trajectory.state)
+# fig.trajectory.state <- ggplot_build(fig.trajectory.state)
+# fig.trajectory.state$data[[2]]$alpha <- 0.3
+# 
+# fig.trajectory.state <- ggplot_gtable(fig.trajectory.state)
+fig5.a <- fig.trajectory.state
 saveManuscriptPlot(fig5.a, 8, 4)
 fig5.a
 
@@ -1152,20 +1214,64 @@ fig.bar.state.cells <- pData(cells.filter) %>%
   ggplot(aes(x = State, y = num_cells, fill = State)) +
   geom_text(aes(label = num_cells), position = position_dodge(width = 0.9), vjust = -0.25) +
   geom_bar(alpha = 1, stat = "identity") +
+  ylim(c(0,1050)) +
   theme(legend.position = "none") +
   theme_ms() +
   theme(
     legend.position = "none",
-    aspect.ratio = 1,
-    axis.text = element_text(size = rel(1.5)),
-    axis.title = element_text(face = "bold", size = rel(2))
+    axis.text = element_text(size = rel(1)),
+    axis.title = element_text(face = "bold", size = rel(1))
   ) +
   labs(y = "Number of cells", x = "State") +
   scale_fill_manual(values = colour.set)
 
-fig4.b <- fig.bar.state.cells
-saveManuscriptPlot(fig4.b, 6, 6)
-fig4.b
+fig5.b <- fig.bar.state.cells
+saveManuscriptPlot(fig5.b, 6, 6)
+fig5.b
+```
+## Median relative HC & LC in each cell state
+```{r}
+pData(cells.filter) %>%
+  group_by(State) %>%
+  summarise(`Cell number` = n(), `Median relative HC expression` = median(rel.exprs.hc), `Max. expression` = max(rel.exprs.hc)) %>%
+  DT::datatable(rownames = T,
+  options = list(
+    pagelength = T,
+    scrollX = T,
+    columnDefs = list(list(
+      className = "dt-head-center dt-center",
+      targets = 1:2
+    ))
+  )
+) %>% formatSignif(digits = 2, columns = 3:4)
+
+pData(cells.filter) %>%
+  group_by(State) %>%
+  summarise(`Cell number` = n(), `Median relative LC expression` = median(rel.exprs.lc), `Max. expression` = max(rel.exprs.lc)) %>%
+  DT::datatable(rownames = T,
+  options = list(
+    pagelength = T,
+    scrollX = T,
+    columnDefs = list(list(
+      className = "dt-head-center dt-center",
+      targets = 1:2
+    ))
+  )
+) %>% formatSignif(digits = 2, columns = 3:4)
+```
+
+
+## Differential expression of LC & HC 
+```{r}
+j<-1
+for (i in 2:9) {
+state_diff_expression <- list()
+state_diff_expression[[j]]<- differentialGeneTest(cells.filter[, pData(cells.filter)$State %in% c(1, 2)], 
+                                        fullModelFormulaStr = "~batch + num_genes_expressed + total.mRNAs + S.Score + G2M.Score + State",
+                                        reducedModelFormulaStr = "~batch + num_genes_expressed + total.mRNAs + S.Score + G2M.Score",
+                                        cores = detectCores())
+j<-j+1
+}
 ```
 
 ## HC state expression
@@ -1174,32 +1280,29 @@ fig.box.hc.state <- pData(cells.filter) %>%
   group_by(State) %>%
   ggplot(aes(x = State, y = rel.exprs.hc, fill = State)) +
   geom_violin(alpha = 0.2) +
-  geom_boxplot(alpha = 1, width = 0.2) +
-  scale_y_log10() +
+  geom_boxplot(alpha = 1, width = 0.15) +
+  scale_y_log10(limits = c(0.5,1e2)) +
   theme_ms() +
   theme(
     legend.position = "none",
-    aspect.ratio = 1,
     axis.text = element_text(size = rel(1)),
-    axis.title = element_text(face = "bold", size = rel(1.5)),
-    plot.title = element_text(size = rel(1.5))
+    axis.title = element_text(face = "bold", size = rel(1)),
+    plot.title = element_text(size = rel(1))
   ) +
   labs(y = "Relative expression", x = "State", title = "Heavy Chain") +
   stat_compare_means(
+    label.y.npc = c(0.95),
     label = "p.signif",
     method = "wilcox.test",
     ref.group = "1",
-    hide.ns = TRUE
+    hide.ns = TRUE,
+    size=7
   ) +
   scale_fill_manual(values = colour.set)
 
 fig5.c <- fig.box.hc.state
 saveManuscriptPlot(fig5.c, 6, 6)
 fig5.c
-
-pData(cells.filter) %>%
-  group_by(State) %>%
-  summarise(median(rel.exprs.hc))
 ```
 
 ## HC trajectory
@@ -1209,7 +1312,7 @@ fig.trajectory.rel.hc <- plot_cell_trajectory(cells.filter,
   theta = 0,
   show_branch_points = FALSE,
   color_by = "rel.exprs.hc",
-  cell_size = 0.8
+  cell_size = 0.5
 ) +
   color.gradient +
   labs(x = "Component 1", y = "Component 2", color = "Relative\nExpression", title = "Heavy Chain") +
@@ -1217,8 +1320,8 @@ fig.trajectory.rel.hc <- plot_cell_trajectory(cells.filter,
   theme(
     legend.position = "right",
     axis.text = element_text(size = rel(1)),
-    axis.title = element_text(face = "bold", size = rel(1.5)),
-    plot.title = element_text(size = rel(1.5))
+    axis.title = element_text(face = "bold", size = rel(1)),
+    plot.title = element_text(size = rel(1))
   ) +
   scale_x_reverse()
 
@@ -1229,32 +1332,31 @@ fig5.e
 
 ## LC state expression
 ```{r}
-pData(cells.filter) %>%
-  group_by(State) %>%
-  summarise(median(rel.exprs.lc))
-
 # relative expression of the light chain in each cell state
 fig.box.lc.state <- pData(cells.filter) %>%
   group_by(State) %>%
   ggplot(aes(x = State, y = rel.exprs.lc, fill = State)) +
   geom_violin(alpha = 0.2) +
   geom_boxplot(alpha = 1, width = 0.15) +
-  scale_y_log10() +
+  scale_y_log10(limits = c(0.5,1e2)) +
   theme(legend.position = "none") +
   theme_ms() +
   theme(
     legend.position = "none",
-    aspect.ratio = 1,
+  
     axis.text = element_text(size = rel(1)),
-    axis.title = element_text(face = "bold", size = rel(1.5)),
-    plot.title = element_text(size = rel(1.5))
+    axis.title = element_text(face = "bold", size = rel(1)),
+    plot.title = element_text(size = rel(1))
   ) +
   labs(y = "Relative expression", x = "State", title = "Light Chain") +
   stat_compare_means(
+    label.y.npc = c(0.95),
     label = "p.signif",
     method = "wilcox.test",
     ref.group = "1",
-    hide.ns = TRUE
+    hide.ns = TRUE, 
+    size=7,
+    color="black"
   ) +
   scale_fill_manual(values = colour.set)
 
@@ -1270,7 +1372,7 @@ fig.trajectory.rel.lc <- plot_cell_trajectory(cells.filter,
   theta = 0,
   show_branch_points = FALSE,
   color_by = "rel.exprs.lc",
-  cell_size = 0.8
+  cell_size = 0.5
 ) +
   color.gradient +
   labs(x = "Component 1", y = "Component 2", color = "Relative\nExpression", title = "Light Chain") +
@@ -1278,8 +1380,8 @@ fig.trajectory.rel.lc <- plot_cell_trajectory(cells.filter,
   theme(
     legend.position = "right",
     axis.text = element_text(size = rel(1)),
-    axis.title = element_text(face = "bold", size = rel(1.5)),
-    plot.title = element_text(size = rel(1.5))
+    axis.title = element_text(face = "bold", size = rel(1)),
+    plot.title = element_text(size = rel(1))
   ) +
   scale_x_reverse()
 
@@ -1287,6 +1389,16 @@ fig5.f <- fig.trajectory.rel.lc
 saveManuscriptPlot(fig5.f, 12, 6)
 fig5.f
 ```
+
+### Figure 5
+```{r fig.height=12, fig.width=10}
+p1 <- (fig5.a + labs(tag="(a)")) / (fig5.e + labs(tag="(c)")) / (fig5.f + labs(tag="(e)"))   
+p2 <-  (fig5.b + labs(tag="(b)")) / (fig5.c + labs(tag="(d)")) / (fig5.d + labs(tag="(f)"))
+
+figure5 <- p1 | p2 + plot_annotation(tag_levels = "a", tag_prefix = "(", tag_suffix = ")")
+saveManuscriptPlot(figure5,16,11)
+```
+
 
 # Expression of CHO genes along trajectory
 
@@ -1299,16 +1411,16 @@ fig.trajectory.pseudotime <- plot_cell_trajectory(cells.filter,
   color_by = "Pseudotime",
   theta = 0,
   show_branch_points = FALSE,
-  cell_size = 0.8
+  cell_size = 0.5
 ) +
-  labs(x = "Component 1", y = "Component 2") +
+  labs(x = "Component 1", y = "Component 2", title="Monocle pseudotime") +
   scale_color_viridis_c(option = "D") +
   theme_ms() +
   theme(
     legend.position = "right",
     legend.title.align = 0.5,
-    axis.text = element_text(size = rel(1.5)),
-    axis.title = element_text(face = "bold", size = rel(2))
+    axis.text = element_text(size = rel(1)),
+    axis.title = element_text(face = "bold", size = rel(1))
   ) +
   scale_x_reverse()
 # guides(color = guide_legend(override.aes = list(size = 5)))
@@ -1486,16 +1598,17 @@ fig.traj.rel.psap <- plot_cell_trajectory(cells.filter,
                                               theta = 0, 
                                               show_branch_points = FALSE, 
                                               color_by = "rel.exprs.psap", 
-                                              cell_size = 0.8) +
+                                              cell_size = 0.5) +
                                               color.gradient + 
                                               labs(x = "Component 1", 
                                                    y = "Component 2",
-                                                   color="Psap\nexpression") +
+                                                   title = "Psap",
+                                                   color="Relative\nexpression") +
                                               theme_ms() +
   theme(legend.position = "right",
         axis.text = element_text(size = rel(1)), 
-    axis.title = element_text(face = "bold", size = rel(1.5)),
-    plot.title = element_text(size = rel(1.5))) +
+    axis.title = element_text(face = "bold", size = rel(1)),
+    plot.title = element_text(size = rel(1))) +
   scale_x_reverse()
                                               
 
@@ -1512,16 +1625,17 @@ fig.traj.rel.tomm20 <- plot_cell_trajectory(cells.filter,
                                               theta = 0, 
                                               show_branch_points = FALSE, 
                                               color_by = "rel.exprs.tomm20", 
-                                              cell_size = 0.8) +
+                                              cell_size = 0.5) +
                                               color.gradient + 
                                               labs(x = "Component 1", 
                                                    y = "Component 2",
-                                                   color="Tomm20\nexpression") +
+                                                   title="Tomm20",
+                                                   color="Relative\nexpression") +
                                               theme_ms() +
                                              theme(legend.position = "right",
         axis.text = element_text(size = rel(1)), 
-    axis.title = element_text(face = "bold", size = rel(1.5)),
-    plot.title = element_text(size = rel(1.5))) +
+    axis.title = element_text(face = "bold", size = rel(1)),
+    plot.title = element_text(size = rel(1))) +
   scale_x_reverse()
 
 fig6.d <- fig.traj.rel.tomm20
@@ -1537,16 +1651,17 @@ fig.traj.rel.hmox1 <- plot_cell_trajectory(cells.filter,
                                               theta = 0, 
                                               show_branch_points = FALSE, 
                                               color_by = "rel.exprs.hmox1", 
-                                              cell_size = 0.8) +
+                                              cell_size = 0.5) +
                                               color.gradient + 
                                               labs(x = "Component 1", 
                                                    y = "Component 2",
-                                                   color="Hmox1\nexpression") +
+                                                   title = "Hmox1",
+                                                   color="Relative\nexpression") +
                                               theme_ms() +
   theme(legend.position = "right",
         axis.text = element_text(size = rel(1)), 
-    axis.title = element_text(face = "bold", size = rel(1.5)),
-    plot.title = element_text(size = rel(1.5))) +
+    axis.title = element_text(face = "bold", size = rel(1)),
+    plot.title = element_text(size = rel(1))) +
   scale_x_reverse()
                                             
 
@@ -1563,16 +1678,17 @@ fig.traj.rel.fth1 <- plot_cell_trajectory(cells.filter,
                                               theta = 0, 
                                               show_branch_points = FALSE, 
                                               color_by = "rel.exprs.fth1", 
-                                              cell_size = 0.8) +
+                                              cell_size = 0.5) +
                                               color.gradient + 
                                               labs(x = "Component 1", 
                                                    y = "Component 2",
-                                                   color="Fth1\nexpression") +
+                                                   title = "Fth1",
+                                                   color="Relative\nexpression") +
                                               theme_ms() +
   theme(legend.position = "right",
         axis.text = element_text(size = rel(1)), 
-    axis.title = element_text(face = "bold", size = rel(1.5)),
-    plot.title = element_text(size = rel(1.5))) +
+    axis.title = element_text(face = "bold", size = rel(1)),
+    plot.title = element_text(size = rel(1))) +
   scale_x_reverse()
                                               
 
@@ -1580,6 +1696,17 @@ fig6.f <- fig.traj.rel.fth1
 saveManuscriptPlot(fig6.f, 7, 3)
 fig6.f
 ```
+
+### Figure 6
+```{r}
+p1 <- (fig6.a + labs(tag="(a)")) / (ggplot() + theme_void() + labs(tag="(b)")) / (ggplot() + theme_void()) / (ggplot() + theme_void()) / (ggplot() + theme_void())
+p2 <- (fig6.c + labs(tag="(c)")) / (fig6.d + labs(tag="(d)")) / (fig6.e + labs(tag="(e)")) / (fig6.f + labs(tag="(f)"))
+
+figure6 <- p1 |  p2 
+
+saveManuscriptPlot(figure6,12,10)
+```
+
 
 # Session info
 ```{r}
