@@ -14,10 +14,10 @@ output:
   html_notebook: 
     df_print: paged
     smooth_scroll: yes
-    theme: cerulean
+    theme: flatly
     toc: yes
     toc_float: yes
-    highlight: haddock
+    highlight: tango
     number_sections: yes
     fig_caption: yes
     fig_width: 5
@@ -26,22 +26,27 @@ output:
     toc: yes
 ---
 
+<style>
+.main-container { width: 1600px; max-width:3200px;}
+</style>  
+
 ```{r setup, echo=FALSE, cache=FALSE}
 library(knitr)
 library(rmdformats)
 
 ## Global options
-options(max.print = "75")
+options(width=4000)
 opts_chunk$set(
-  echo = FALSE,
-  cache = TRUE,
+  echo = TRUE,
+  cache = FALSE,
   prompt = FALSE,
   tidy = TRUE,
   comment = NA,
   message = FALSE,
-  warning = FALSE
+  warning = FALSE,
+  fig.align = "center"
 )
-opts_knit$set(width = 75)
+#opts_knit$set(width = 150)
 ```
 ***
 # Introduction
@@ -49,7 +54,7 @@ opts_knit$set(width = 75)
 This R notebook enables the reproduction of the analysis described in:  
 
 
-**Tracing production instability in a clonally-derived CHO cell line using single cell transcriptomics**
+Tzani *et al.* **Tracing production instability in a clonally-derived CHO cell line using single cell transcriptomics** (2020) *bioRxiv* 
 
 
 In this study, the four biological replicates of a clonally derived CHO cell line were
@@ -59,39 +64,18 @@ Rhapsody WTA pipeline and combined into a single sample.
 
 ## Raw Data Availibility
 
-The FASTQ files for this study are availiable from the NCBI Sequence Read Archive
-ID: PRJNA661407
+The FASTQ files for this study are available from the NCBI Sequence Read Archive
+ID: [PRJNA661407](https://www.ncbi.nlm.nih.gov/bioproject/PRJNA661407)
+
+The associated github repository can be found [here](https://github.com/clarke-lab/CHO_cell_scRNASeq/)
 
 # Prepare for Analysis
 
 ## Load packages
-```{r load_packages, echo=TRUE, message=FALSE, warning=FALSE}
-library(monocle)
-library(plyr)
-library(dplyr)
-library(ggExtra)
-library(reshape)
-library(colorRamps)
-library(stringr)
-library(Seurat)
-library(BiocParallel)
-library(ggpubr)
-library(DT)
-library(WebGestaltR)
-library(ggalt)
-library(biomaRt)
-library(patchwork)
-library(viridis)
-library(gridExtra)
-library(grid)
-library(gganimate)
-library(hrbrthemes)
-library(jcolors)
-library(cowplot)
-library(data.table)
-library(GGally)
-library(ggplotify)
-library(writexl)
+```{r load_packages, message=FALSE, warning=FALSE, include=FALSE, echo=TRUE}
+package_list <- c("monocle", "plyr", "dplyr", "ggExtra", "reshape", "colorRamps", "stringr", "BioParallel", "ggpubr", "DT", "WebGestaltR", "ggalt", "biomaRt", "patchwork", "viridis", "gridExtra", "grid", "gganimate", "hrbthemes", "jcolors", "cowplot", "data.table", "GGally", "ggplotify", "writexl", "Seurat")
+
+lapply(package_list, require, character.only = TRUE)
 ```
 
 ## Set seed
@@ -151,7 +135,7 @@ saveManuscriptPlot <- function(p, width, height) {
 
 ## Calculate relative expression
 Create a function to determine the relative expression of a gene from a Monocle cell dataset. When the expression of a gene is than the detection limit, the gene is equal to the detection limit.
-```{r}
+```{r monocle_rel_exprs_func}
 monocle_relative_expression <- function(cds, gene) {
   normalized_expression <- t(exprs(cds[gene, ])) / sizeFactors(cds)
   normalized_expression[normalized_expression < cds@lowerDetectionLimit] <- cds@lowerDetectionLimit
@@ -164,7 +148,7 @@ monocle_relative_expression <- function(cds, gene) {
 We import data from the [Seven Bridges Genomics](https://www.sevenbridges.com/) (SBG) platform for analysis in R. The UMI data for each replicate is stored in a separate CSV file with each row representing an individual cell, the column represents a gene. In this experiment, 4 biological replicates for the CHOK1 DP12 cell line were analysed using Rhapsody WTA. We create a batch ID than be used to regress any technical variation due to batch. We determine the genes detected **in at least one replicate**. If a gene is not detected in a replicate we assign a 0 UMI value for that replicate. The replicates are then combined in a single matrix.
 
 ### SBG file import
-```{r load_data}
+```{r load_scrnaseq_data}
 raw_umi_r1 <- read.table("scrnaseq_data/CHOK1DP12_r1.csv", sep = ",", header = T, row.names = 1, check.names = FALSE)
 raw_umi_r1_batch <- rep("rep1", dim(raw_umi_r1)[1])
 
@@ -225,7 +209,7 @@ paste("Raw data for", dim(cells)[2], "and", dim(cells)[1], " genes captured")
 
 ## bulk RNASeq
 To compare a matched bulkRNASeq dataset to our single cell data were calculated a gene-level transcripts per million (TPM) value using Kallisto.
-```{r}
+```{r import_bulk_rnaseq_data}
 # import the TPM results from Kalisto for the four matched bulk samples
 bulk_tpm <- read.table("bulkrnaseq_data/gene_mab_tpms_all_samples.tsv", header = T, row.names = 1)
 
@@ -258,7 +242,7 @@ colnames(bulk_tpm) <- c("Replicate 1", "Replicate 2", "Replicate 3", "Replicate 
 # Replicate comparison
 ## scRNASeq
 To compare to the bulk RNASeq data we merge the scRNASeq to  pseudoBulk profiles, 1 for each replicate and convert expression to TPM. We then determine the agreement between the replicates
-```{r bulk_comparison, fig.height=6, fig.width=6, message=FALSE}
+```{r bulk_comparison, fig.height=6, fig.width=6,  message=FALSE}
 # separate the scRNA by Rhapsody cartridge from the monocle CDS
 # sum the UMI counts and convert to log(TPM+1)
 
@@ -306,7 +290,7 @@ s.fig1
 
 ## bulk RNASeq
 Determine the agreement between the bulkRNASeq replicates 
-```{r}
+```{r fig.height=6, fig.width=6}
 fig.cor.bulkRNASeq <- ggpairs(bulk_tpm,
   lower = list(
     continuous = wrap("points",
@@ -323,11 +307,12 @@ s.fig2 <- fig.cor.bulkRNASeq
 saveManuscriptPlot(s.fig2, 8, 8)
 s.fig2
 ```
+
 # scRNASeq v bulkRNASeq
 Comparison of each scRNASeq sample to it’s respective matched bulkRNASeq sample.
 
 ## Map gene IDs
-```{r}
+```{r gene_id_mapping}
 # annotate the genes with biomaRt
 ensembl <- useMart(
   host = "http://sep2019.archive.ensembl.org",
@@ -378,7 +363,7 @@ bulk_ids <- c(matched_to_cds_symbols$ensembl_gene_id, ensembl_cds, "heavy_chain"
 ```
 
 ## Correlation between single cell and bulk RNASeq data
-```{r}
+```{r scrnaseq_bulk_cor, fig.height=6, fig.width=6}
 # determine the density of points to colour plot
 density_r1 <- densCols(bulk_tpm_r1[bulk_ids], norm_pseudocounts_r1[cds_ids],
   colramp = colorRampPalette(rev(rainbow(10, end = 4 / 6))), nbin = 64
@@ -441,7 +426,7 @@ The first stage of preprocessing in the Monocle workflow aims to eliminate poor 
 
 ## Filter by Total UMIs
 Cells that have too few UMIs per cells as well as those that have too many UMIs per cell are removed from the analysis.
-```{r total_umi, fig.height=4, fig.width=4, fig.cap="Figure", fig.align="center"}
+```{r total_umi_filter, fig.height=4, fig.width=4}
 # determine the sum of UMIs captured for each cell
 pData(cells)$total.mRNAs <- Matrix::colSums(exprs(cells))
 
@@ -481,9 +466,10 @@ fig1.b <- fig.total.mRNA
 saveManuscriptPlot(fig1.b, 6, 6)
 fig1.b
 ```
+
 ## Filter by mtDNA reads
 A cell with >= 15% of the total UMIs originating from mitochondrial genes is removed.
-```{r total_mito, fig.align="center", fig.cap="Figure", fig.height=4, fig.width=4, message=FALSE, warning=FALSE}
+```{r total_mito_filter, fig.height=4, fig.width=4, message=FALSE, warning=FALSE}
 # determine the fraction of UMIs from mito mRNAs
 pData(cells)$mito.mRNAs <- Matrix::colSums(exprs(cells[row.names(subset(
   fData(cells),
@@ -519,7 +505,7 @@ fig1.c
 ```
 
 ## Remove poor quality cells
-```{r filter_cells, fig.align="center", fig.cap="Figure", fig.height=5, fig.width=5, message=FALSE, warning=FALSE}
+```{r filter_cells, fig.height=5, fig.width=5, message=FALSE, warning=FALSE}
 # IDs of cells passing both criteria
 qc_passed_cells <- intersect(mito_mRNA_passed, total_mRNA_passed)
 
@@ -566,9 +552,10 @@ fig1.d <- fig.cells.removed
 saveManuscriptPlot(fig1.d, 6, 6)
 fig1.d
 ```
+
 ## Filter Genes by expression
 We now remove genes that are not expressed in more than 50 cells in our dataset or the maximum expression is less than 2 UMIs in any cell
-```{r filter_genes, fig.align="center", fig.cap="Figure", fig.height=4, fig.width=4, message=FALSE, warning=FALSE}
+```{r filter_genes, fig.height=4, fig.width=4, message=FALSE, warning=FALSE}
 cells.filter <- estimateSizeFactors(cells.filter)
 
 cells.filter <- estimateDispersions(cells.filter)
@@ -608,9 +595,10 @@ fig.genes.expression <- ggplot(data = pData(cells)$num_genes_expressed, aes(pDat
 fig1.e <- fig.genes.expression
 saveManuscriptPlot(fig1.e, 6, 6)
 fig1.e
-```
+```  
+
 ### Figure 2
-```{r fig.height=6, fig.width=10}
+```{r figure_2, fig.height=6, fig.width=10}
 p1 <- (ggplot() +
   theme_void() +
   labs(tag = "(a)")) / (ggplot() +
@@ -692,7 +680,7 @@ fData(cells.filter)$gene_short_name[match(annotation$ensembl_gene_id, fData(cell
 For the next section we used the cell cycle scoring function of Seurat to determine which phase of the cell cycles cells were in. Using this function will allow us to correct the effect of cell cycle in subsequent analyses.
 
 ## Create a Seurat object
-```{r create seurat object, message=FALSE, warning=FALSE}
+```{r create_seurat_object, message=FALSE, warning=FALSE}
 # extract the raw counts from the cds and make a Seurat oject containing the batch variable
 cho.obj <- CreateSeuratObject(
   counts = exprs(cells.filter),
@@ -708,7 +696,7 @@ cho.obj <- AddMetaData(
 ```
 ## Preprocess Seurat 
 Before scoring cells by the cell cycle phase any variation due to batch is removed
-```{r normalize data in Seurat, message=FALSE, warning=FALSE, include=FALSE}
+```{r normalize_data_in_seurat, message=FALSE, warning=FALSE, include=FALSE}
 cho.obj <- NormalizeData(cho.obj)
 
 cho.obj <- FindVariableFeatures(cho.obj,
@@ -722,13 +710,13 @@ cho.obj <- ScaleData(cho.obj,
 ```
 ## Specify cell cycle genes
 Here we use custom CHO cell genes involved in cell cycle 
-```{r convert cell cycle genes to CHO gene ids, message=FALSE, warning=FALSE}
+```{r convert_cc_genes_to_CHO, message=FALSE, warning=FALSE}
 s.genes <- read.table("./genelists/cho.s.txt", stringsAsFactors = F)
 
 g2m.genes <- read.table("./genelists/cho.g2m.txt", stringsAsFactors = F)
 ```
 ## Calculate the cell cycle scores
-```{r calculate cell cycle scores with Seurat, fig.height=6, fig.width=12, message=FALSE, warning=FALSE}
+```{r calculate_cc_scores, fig.height=6, fig.width=12, message=FALSE, warning=FALSE}
 # run the seurat cell cycle scoring module
 cho.obj <- CellCycleScoring(cho.obj,
   s.features = s.genes$V1,
@@ -737,7 +725,7 @@ cho.obj <- CellCycleScoring(cho.obj,
 )
 ```
 ## Add cell cycle scores to CDS
-```{r add Seurat cell cycle scores to cds}
+```{r add_cc_scores_to_cds}
 pData(cells.filter)$S.Score <- cho.obj$S.Score
 pData(cells.filter)$G2M.Score <- cho.obj$G2M.Score
 pData(cells.filter)$cc_phase <- cho.obj$Phase
@@ -747,7 +735,7 @@ To conduct an exploratory analysis of CHO K1 DP12N1 scRNASeq data we perform an 
 
 ## Identify variable genes
 Identify the most variable genes in the scRNASeq dataset.
-```{r select_variable_genes, fig.align="center", fig.cap="Figure", fig.height=4, fig.width=4, message=FALSE, warning=FALSE}
+```{r select_variable_genes, fig.height=4, fig.width=4, message=FALSE, warning=FALSE}
 options(warn = -1) # suppress warnings that otherwise clutter output
 #' prioritize variable genes for the analysis
 disp_table <- dispersionTable(cells.filter)
@@ -768,10 +756,11 @@ fig.variable.genes <- plot_ordering_genes(cells.filter) +
 fig2.a <- fig.variable.genes
 saveManuscriptPlot(fig2.a, 6, 6)
 fig2.a
-```
+```  
+
 ## Select PCs
 The dimensionality of the single cell expression data was further reduced using principal components analysis (PCA) and following determination of the proportion of variance captured by each component, the first 12 PCs were selected for t-SNE.
-```{r PCA_select_plot, fig.align="center", fig.cap="Figure", fig.height=4, fig.width=4, message=TRUE}
+```{r pca_select_plot, fig.align="center", fig.width=4, message=TRUE}
 fig.pc.variance <- plot_pc_variance_explained(cells.filter, return_all = FALSE) +
   geom_vline(xintercept = 12, linetype = "dashed", color = "red", size = 0.5) +
   labs(x = "Principal Component", y = "Variance Explained") +
@@ -781,10 +770,11 @@ fig.pc.variance <- plot_pc_variance_explained(cells.filter, return_all = FALSE) 
 fig2.b <- fig.pc.variance
 saveManuscriptPlot(fig2.b, 6, 6)
 fig2.b
-```
+```  
+
 ## t-Stocastic neighbour embedding
 To account for potential heterogeneity from technical and biological confounding factors, we corrected the UMI count data prior to t-SNE, ensuring that covariation between multiple factors was removed simultaneously. For technical covariates, possible batch effects arising from use of different cell isolation cartridges as well as differences in the total number of UMIs captured and genes detected per cell were regressed out.
-```{r tSNE_density_plot, fig.align="center", fig.cap="Figure", fig.height=6, fig.width=6, message=FALSE, warning=FALSE}
+```{r tsne, fig.height=6, fig.width=6, message=FALSE, warning=FALSE}
 cells.filter <- reduceDimension(cells.filter,
   max_components = 2, num_dim = 12,
   reduction_method = "tSNE",
@@ -795,7 +785,7 @@ cells.filter <- reduceDimension(cells.filter,
 ```
 ## Identify tSNE clusters
 The Monocle densityPeak with parameters rho = 2 & delta = 4 is used to identify subclusters in the data. Note: the t-SNE plot with identified clusters is shown below.
-```{r}
+```{r id_clusters}
 cells.filter <- clusterCells(cells.filter, rho_threshold = 2, delta_threshold = 4, skip_rho_sigma = T)
 
 fig.scatter.rho.delta <- plot_rho_delta(cells.filter, rho_threshold = 2, delta_threshold = 4) +
@@ -804,10 +794,11 @@ fig.scatter.rho.delta <- plot_rho_delta(cells.filter, rho_threshold = 2, delta_t
 fig_s_5 <- fig.scatter.rho.delta
 saveManuscriptPlot(fig_s_5, 6, 6)
 fig_s_5
-```
+```  
+
 ## Effect of CC correction
 Here we show the effect of correcting for cell cycle on the t-SNE visualisation.
-```{r}
+```{r cc_correction_fig}
 cells.filter <- reduceDimension(cells.filter,
   max_components = 2, num_dim = 12,
   reduction_method = "tSNE",
@@ -863,7 +854,7 @@ fig_s_4b
 
 ## tSNE density
 Visualiation of cell density in 2D t-SNE plot, show the presence of sub-clusters confirming the presence of transcriptional heterogeneity. 
-```{r fig.height=5, fig.width=5}
+```{r tsne_density_plot, fig.height=5, fig.width=5}
 # extract the monocle reduced dimesions
 tsne_coordinates <- t(reducedDimA(cells.filter))
 
@@ -898,7 +889,7 @@ fig2.c
 
 ## tSNE clusters
 To identify groups  of cells form the tSNE plot we use densityPeak algorithm. Each cluster is assinged a color for reference.
-```{r cluster_identification, fig.align="center", fig.cap="Figure", fig.height=5, fig.width=5}
+```{r cluster_identification, fig.height=5, fig.width=5}
 fig.tsne.cluster <- plot_cell_clusters(cells.filter, color = "Cluster", cell_size = 0.5) +
   scale_y_continuous(limits = c(-35, 35)) +
   scale_x_continuous(limits = c(-35, 35)) +
@@ -917,9 +908,10 @@ fig2.d <- fig.tsne.cluster
 saveManuscriptPlot(fig2.d, 6, 6)
 
 fig2.d
-```
+```  
+
 ### Figure 2 
-```{r}
+```{r figure_2_save}
 figure2 <- (fig2.a | fig2.b) / (fig2.c | fig2.d) +
   plot_annotation(tag_levels = "a", tag_prefix = "(", tag_suffix = ")")
 saveManuscriptPlot(figure2, 9, 9)
@@ -983,12 +975,13 @@ fig.density.mab.bulk <- bulk_tpm_median %>%
 s_fig5 <- fig.density.mab.bulk
 saveManuscriptPlot(s_fig5, 12, 6)
 s_fig5
-```
+```  
+
 ## scRNASeq
 
 ## HC & LC violin
 Heavy and light chain expression across the population.
-```{r}
+```{r mab_violin}
 # create a relative expression violin plot for the heavy and light chain
 pData(cells.filter)$rel.exprs.hc <- monocle_relative_expression(cells.filter, "heavy_chain")
 pData(cells.filter)$rel.exprs.lc <- monocle_relative_expression(cells.filter, "light_chain")
@@ -1026,7 +1019,7 @@ fig3.b
 
 ## HC tSNE
 Light expression visualised in the t-SNE space.
-```{r}
+```{r hc_tsne}
 fig.tsne.rel.hc <- plot_cell_clusters(cells.filter, color = "rel.exprs.hc", cell_size = 0.5) +
   color.gradient +
   theme_ms() +
@@ -1050,7 +1043,7 @@ fig3.d
 
 ## HC cluster expression
 Assessing the difference in heavy chain expession for the t-SNE clusters.
-```{r}
+```{r hc_expression_by_cluster}
 pData(cells.filter) %>%
   group_by(Cluster) %>%
   summarise(`Cell number` = n(), `Median relative HC expression` = median(rel.exprs.hc), `Max. expression` = max(rel.exprs.hc)) %>%
@@ -1097,7 +1090,7 @@ fig3.f
 
 ## LC tSNE
 Light expression visualised in the t-SNE space.
-```{r fig.cap="Figure x"}
+```{r lc_tsne}
 fig.tsne.rel.lc <- plot_cell_clusters(cells.filter, color = "rel.exprs.lc", cell_size = 0.5) +
   color.gradient +
   theme_ms() +
@@ -1117,10 +1110,11 @@ fig.tsne.rel.lc <- plot_cell_clusters(cells.filter, color = "rel.exprs.lc", cell
 fig3.e <- fig.tsne.rel.lc
 saveManuscriptPlot(fig3.e, 6, 6)
 fig3.e
-```
+```  
+
 ## LC cluster expression
 Assessing the difference in heavy chain expession for the t-SNE clusters.
-```{r}
+```{r lc_expression_by_cluster}
 pData(cells.filter) %>%
   group_by(Cluster) %>%
   summarise(`Cell number` = n(), `Median relative LC expression` = median(rel.exprs.lc), `Max. expression` = max(rel.exprs.lc)) %>%
@@ -1167,7 +1161,7 @@ fig3.g
 
 ### Figure 3
 Create and save figure 3 for the manuscript.
-```{r fig.height=9, fig.width=9}
+```{r figure_3_save, fig.height=9, fig.width=9}
 p1 <- fig3.b | fig2.d + theme(legend.position = "right")
 p2 <- fig3.f / fig3.g
 p3 <- fig3.d + theme(legend.position = "right") | fig3.e + theme(legend.position = "right")
@@ -1183,7 +1177,7 @@ saveManuscriptPlot(figure3, 9, 12)
 ## Construct trajectory 
 Using the genes found to vary beteen the identified clusters we first project onto a 2D space using the DDRTree algorithm before ording the cells in
 pseduotime
-```{r generate_monocle_trajectory, warning=FALSE, fig.cap="Figure", fig.align="center"}
+```{r generate_monocle_trajectory, warning=FALSE}
 de_genes <- cluster_de %>%
   arrange(qval) %>%
   filter(qval < 0.01)
@@ -1263,9 +1257,10 @@ fig.bar.state.cells <- pData(cells.filter) %>%
 fig5.b <- fig.bar.state.cells
 saveManuscriptPlot(fig5.b, 6, 6)
 fig5.b
-```
+```  
+
 ## Median relative HC & LC in each cell state
-```{r}
+```{r mab_violin_state}
 pData(cells.filter) %>%
   group_by(State) %>%
   summarise(`Cell number` = n(), `Median relative HC expression` = median(rel.exprs.hc), `Max. expression` = max(rel.exprs.hc)) %>%
@@ -1300,21 +1295,8 @@ pData(cells.filter) %>%
 ```
 
 
-## Differential expression of LC & HC 
-```{r}
-# j<-1
-# for (i in 2:9) {
-# state_diff_expression <- list()
-# state_diff_expression[[j]]<- differentialGeneTest(cells.filter[, pData(cells.filter)$State %in% c(1, 2)],
-#                                         fullModelFormulaStr = "~batch + num_genes_expressed + total.mRNAs + S.Score + G2M.Score + State",
-#                                         reducedModelFormulaStr = "~batch + num_genes_expressed + total.mRNAs + S.Score + G2M.Score",
-#                                         cores = detectCores())
-# j<-j+1
-# }
-```
-
 ## HC state expression
-```{r}
+```{r hc_violin_state}
 fig.box.hc.state <- pData(cells.filter) %>%
   group_by(State) %>%
   ggplot(aes(x = State, y = rel.exprs.hc, fill = State)) +
@@ -1345,7 +1327,7 @@ fig5.c
 ```
 
 ## HC trajectory
-```{r message=FALSE, warning=FALSE}
+```{r hc_trajectory, message=FALSE, warning=FALSE}
 # overlay the heavy chain expression on the trajectory plot
 fig.trajectory.rel.hc <- plot_cell_trajectory(cells.filter,
   theta = 0,
@@ -1370,7 +1352,7 @@ fig5.e
 ```
 
 ## LC state expression
-```{r}
+```{r lc_violin_state}
 # relative expression of the light chain in each cell state
 fig.box.lc.state <- pData(cells.filter) %>%
   group_by(State) %>%
@@ -1405,7 +1387,7 @@ fig5.d
 ```
 
 ## LC trajectory
-```{r}
+```{r lc_trajectory}
 # overlay the light chain expression on the trajectory plot
 fig.trajectory.rel.lc <- plot_cell_trajectory(cells.filter,
   theta = 0,
@@ -1431,7 +1413,7 @@ fig5.f
 
 ### Figure 5
 Create and save figure 5 in the manuscript.
-```{r fig.height=12, fig.width=10}
+```{r figure_5_save, fig.height=12, fig.width=10}
 p1 <- (fig5.a + labs(tag = "(a)")) / (fig5.e + labs(tag = "(c)")) / (fig5.f + labs(tag = "(e)"))
 p2 <- (fig5.b + labs(tag = "(b)")) / (fig5.c + labs(tag = "(d)")) / (fig5.d + labs(tag = "(f)"))
 
@@ -1469,10 +1451,11 @@ fig6.a <- fig.trajectory.pseudotime
 saveManuscriptPlot(fig6.a, 7, 3)
 
 fig6.a
-```
+```  
+
 ## Pseudotime differential expression
 Identification of genes that correlated with Pseudotime. Those genes found to have a qval < 0.01 using the Monocle `differentialGeneTest` function were considered significant
-```{r monocle_pseudotime_de, message=TRUE, warning=FALSE, fig.cap="Figure", fig.align="center"}
+```{r monocle_pseudotime_de, message=TRUE, warning=FALSE}
 pseudotime_de <- differentialGeneTest(cells.filter,
   fullModelFormulaStr = "~batch + num_genes_expressed + total.mRNAs + S.Score + G2M.Score + sm.ns(Pseudotime, df = 3)",
   reducedModelFormulaStr = "~batch + num_genes_expressed + total.mRNAs + S.Score + G2M.Score",
@@ -1611,6 +1594,7 @@ datatable(enrich_result[[1]]$enrichResult[, c(1, 2, 4, 5, 7, 8, 9)],
   )
 ) %>% formatSignif(digits = 2, columns = 5:7)
 ```
+
 ### Cluster 2
 ```{r cluster2_enrichment}
 datatable(enrich_result[[2]]$enrichResult[, c(1, 2, 4, 5, 8, 9)],
@@ -1632,7 +1616,7 @@ Overlay the expression of genes found to significantly correlate with the progre
 
 ### Psap
 Plot the expression of the **Prosaposin** gene 
-```{r}
+```{r psap_plot}
 # relative expression
 pData(cells.filter)$rel.exprs.psap <- monocle_relative_expression(cells.filter, "Psap")
 
@@ -1662,10 +1646,11 @@ fig.traj.rel.psap <- plot_cell_trajectory(cells.filter,
 fig6.c <- fig.traj.rel.psap
 saveManuscriptPlot(fig6.c, 7, 3)
 fig6.c
-```
+```  
+
 ### Hmox1
 Plot the expression of the **Heme oxygenase 1** gene 
-```{r}
+```{r hmox_plot}
 # relative expression
 pData(cells.filter)$rel.exprs.hmox1 <- monocle_relative_expression(cells.filter, "Hmox1")
 
@@ -1695,10 +1680,11 @@ fig.traj.rel.hmox1 <- plot_cell_trajectory(cells.filter,
 fig6.e <- fig.traj.rel.hmox1
 saveManuscriptPlot(fig6.e, 7, 3)
 fig6.e
-```
+```  
+
 ### Fth1
 Plot the expression of the **Ferritin 1 heavy chain 1** gene 
-```{r}
+```{r fth_plot}
 # relative expression
 pData(cells.filter)$rel.exprs.fth1 <- monocle_relative_expression(cells.filter, "Fth1")
 
@@ -1732,7 +1718,7 @@ fig6.f
 
 #### Figure 6
 Create and save figure 6 in the manuscript.
-```{r}
+```{r figure_6_save}
 p1 <- (fig6.a + labs(tag = "(a)")) / (ggplot() +
   theme_void() +
   labs(tag = "(b)")) / (ggplot() +
@@ -1742,11 +1728,10 @@ p1 <- (fig6.a + labs(tag = "(a)")) / (ggplot() +
 p2 <- (fig6.f + labs(tag = "(c)")) / (fig6.e + labs(tag = "(d)")) / (fig6.c + labs(tag = "(e)"))
 
 figure6 <- p1 | p2
-
 saveManuscriptPlot(figure6, 12, 10)
 ```
 
 # Session info
-```{r}
+```{r session}
 devtools::session_info()
 ```
