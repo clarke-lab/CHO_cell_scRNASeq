@@ -1,5 +1,10 @@
 ---
 title: "CHOK1 DP12 cell line scRNASeq"
+knit: (function(input_file, encoding) {
+  out_dir <- 'docs';
+  rmarkdown::render(input_file,
+ encoding=encoding,
+ output_file=file.path(dirname(input_file), out_dir, 'index.html'))})
 author: Clarke Lab. NIBRT
 output:
   html_document:
@@ -12,101 +17,77 @@ output:
     theme: flatly
     toc: yes
     toc_float: yes
-    highlight: haddock
+    highlight: tango
     number_sections: yes
-    code_folding: hide
     fig_caption: yes
     fig_width: 5
     fig_height: 5
   pdf_document:
     toc: yes
 ---
+
+<style>
+.main-container { width: 1600px; max-width:3200px;}
+</style>  
+
 ```{r setup, echo=FALSE, cache=FALSE}
 library(knitr)
 library(rmdformats)
 
 ## Global options
-options(max.print = "75")
+options(width=4000)
 opts_chunk$set(
-  echo = FALSE,
-  cache = TRUE,
+  echo = TRUE,
+  cache = FALSE,
   prompt = FALSE,
   tidy = TRUE,
   comment = NA,
   message = FALSE,
-  warning = FALSE
+  warning = FALSE,
+  fig.align = "center"
 )
-opts_knit$set(width = 75)
+#opts_knit$set(width = 150)
 ```
 ***
 # Introduction
-Chinese hamster ovary cells are the dominant expression host for the production
-of recombinant therapeutic proteins.  
 
-This R notebook enables the analysis following analysis enables the reproduction
-of the data analysis described in:  
+This R notebook enables the reproduction of the analysis described in:  
 
 
-**Understanding the evolution of a clonally-derived mAb-antibody producing CHO cell line using single cell transcriptomics**
+Tzani *et al.* **Tracing production instability in a clonally-derived CHO cell line using single cell transcriptomics** (2020) *bioRxiv* 
 
-In this study, the four biological replicates of the CHOK1 DP12 cell line were
-sampled at 72hrs post-seeding and analysed on the BD Rhapsody system.  The FASTQ
-data were converted to a cell gene count matrix using the Seven Bridges Gnees BD
+
+In this study, the four biological replicates of a clonally derived CHO cell line were
+sampled at 72hrs post-seeding and analysed on the BD Rhapsody system whole transcriptome analysis.  The FASTQ
+data were converted to a cell gene count matrix using the [Seven Bridges Genomics](https://www.sevenbridges.com/) BD
 Rhapsody WTA pipeline and combined into a single sample. 
 
-```{r}
-#grid::grid.raster( tiff::readTIFF( "./figure/myfigure.tif") )
-```
+## Raw Data Availibility
 
+The FASTQ files for this study are available from the NCBI Sequence Read Archive
+ID: [PRJNA661407](https://www.ncbi.nlm.nih.gov/bioproject/PRJNA661407)
 
-![experimental design](images/experimental_design.tiff)  
+The associated github repository can be found [here](https://github.com/clarke-lab/CHO_cell_scRNASeq/)
 
-## Data Availibility
-
-FASTQ files: GSEXXXXX 
-
-# Preparation 
-Check for the required packages to run the analysis
+# Prepare for Analysis
 
 ## Load packages
-```{r load_packages, echo=TRUE, message=FALSE, warning=FALSE}
-library(monocle)
-library(plyr)
-library(dplyr)
-library(ggExtra)
-library(reshape)
-library(colorRamps)
-library(stringr)
-library(Seurat)
-library(BiocParallel)
-library(ggpubr)
-library(DT)
-library(WebGestaltR)
-library(ggalt)
-library(biomaRt)
-library(patchwork)
-library(viridis)
-library(gridExtra)
-library(grid)
-library(gganimate)
-library(hrbrthemes)
-library(jcolors)
-library(cowplot)
-library(data.table)
-library(GGally)
-library(ggplotify)
-library(stringr)
-library(writexl)
+```{r load_packages, message=FALSE, warning=FALSE, include=FALSE, echo=TRUE}
+package_list <- c("monocle", "plyr", "dplyr", "ggExtra", "reshape", "colorRamps", "stringr", "BioParallel", "ggpubr", "DT", "WebGestaltR", "ggalt", "biomaRt", "patchwork", "viridis", "gridExtra", "grid", "gganimate", "hrbthemes", "jcolors", "cowplot", "data.table", "GGally", "ggplotify", "writexl", "Seurat")
+
+lapply(package_list, require, character.only = TRUE)
 ```
 
 ## Set seed
+Here we set a seed to facilitate the reproducibility of the analysis
 ```{r seed_for_reproducibility}
 # set a seed for reproducibility
 set.seed(38)
 ```
 
-## Plotting utilites 
+## Plotting setup 
 ```{r plot_setup}
+# ggplot theme
 theme_ms <- function(base_size = 10, base_family = "Helvetica") {
   library(grid)
   (theme_bw(base_size = base_size, base_family = base_family) +
@@ -131,14 +112,18 @@ colour.set <- c(
 )
 
 # color for expression values
-color.gradient <- scale_color_gradientn(colors = matlab.like(200), trans = "log10")
+color.gradient <- scale_color_gradientn(
+  colors = matlab.like(200),
+  trans = "log10"
+)
 
-# figures for paper will be saved here
+# create a directory for saving figures
 figsdir <- "./figures/"
 if (!dir.exists(figsdir)) {
   dir.create(figsdir)
 }
 
+# function to save figures
 saveManuscriptPlot <- function(p, width, height) {
   figfile <- file.path(figsdir, sprintf(
     "%s.png",
@@ -149,8 +134,8 @@ saveManuscriptPlot <- function(p, width, height) {
 ```
 
 ## Calculate relative expression
-Create a function to determine the relative expression of a given gene. When the expression of a gene is than the detection limit, the gene is equal to the detection limit.
-```{r}
+Create a function to determine the relative expression of a gene from a Monocle cell dataset. When the expression of a gene is than the detection limit, the gene is equal to the detection limit.
+```{r monocle_rel_exprs_func}
 monocle_relative_expression <- function(cds, gene) {
   normalized_expression <- t(exprs(cds[gene, ])) / sizeFactors(cds)
   normalized_expression[normalized_expression < cds@lowerDetectionLimit] <- cds@lowerDetectionLimit
@@ -160,10 +145,10 @@ monocle_relative_expression <- function(cds, gene) {
 
 # Import raw data
 ## scRNASeq 
-We import data from the [Seven Bridges Genomics](https://www.sevenbridges.com/) (SBG) plaform for analysis in R. The UMI data is stored in a CSV file with each row representing an individual cell, the column represent a gene. In this experiment 4 biological replicates for the CHOK1 DP12 cell line were analysed using Rhapsody WTA. The row label for each cell contains the replicate ID and that ID is used to create a batch ID than be used to regress any technical variation due to batch  
+We import data from the [Seven Bridges Genomics](https://www.sevenbridges.com/) (SBG) platform for analysis in R. The UMI data for each replicate is stored in a separate CSV file with each row representing an individual cell, the column represents a gene. In this experiment, 4 biological replicates for the CHOK1 DP12 cell line were analysed using Rhapsody WTA. We create a batch ID than be used to regress any technical variation due to batch. We determine the genes detected **in at least one replicate**. If a gene is not detected in a replicate we assign a 0 UMI value for that replicate. The replicates are then combined in a single matrix.
 
-### SBG output
-```{r load_data}
+### SBG file import
+```{r load_scrnaseq_data}
 raw_umi_r1 <- read.table("scrnaseq_data/CHOK1DP12_r1.csv", sep = ",", header = T, row.names = 1, check.names = FALSE)
 raw_umi_r1_batch <- rep("rep1", dim(raw_umi_r1)[1])
 
@@ -197,7 +182,7 @@ rownames(raw_umi) <- str_c("cell_", rownames(raw_umi)) # add text to ensure comp
 raw_umi_batch <- c(raw_umi_r1_batch, raw_umi_r2_batch, raw_umi_r3_batch, raw_umi_r4_batch) # record which Rhapsody cartridge the data came from
 ```
 ### Create Monocle object
-The primary analysis package for this analysis monocle version 2. To use this package we must first create a *cell dataset* (CDS) object containing the raw Rhapsody data. During this process we assign a detection limit along an expressionFamily - in this case *negbinomial* as appropriate for UMI data. Negbinomial is more accurate but takes more time than Negbionomial.size()  
+The primary analysis package for this analysis [Monocle v2](http://cole-trapnell-lab.github.io/monocle-release/docs/) . To use Monocle we must first create a *cell dataset* (CDS) object containing the UMI data. During this process we assign a detection limit along with the expressionFamily - in this case *negbinomial()*.  
 ```{r create_CDS}
 pheno.data <- rep("cho", dim(raw_umi)[1])
 pheno.data.df <- data.frame(type = pheno.data, batch = raw_umi_batch)
@@ -223,7 +208,8 @@ paste("Raw data for", dim(cells)[2], "and", dim(cells)[1], " genes captured")
 ```
 
 ## bulk RNASeq
-```{r}
+To compare a matched bulkRNASeq dataset to our single cell data were calculated a gene-level transcripts per million (TPM) value using Kallisto.
+```{r import_bulk_rnaseq_data}
 # import the TPM results from Kalisto for the four matched bulk samples
 bulk_tpm <- read.table("bulkrnaseq_data/gene_mab_tpms_all_samples.tsv", header = T, row.names = 1)
 
@@ -247,13 +233,16 @@ bulk_tpm <- data.frame(cbind(
   bulk_tpm_r3,
   bulk_tpm_r4
 ))
+
+# rename the columns for each replicate
 colnames(bulk_tpm) <- c("Replicate 1", "Replicate 2", "Replicate 3", "Replicate 4")
 ```
 
 
 # Replicate comparison
 ## scRNASeq
-```{r bulk_comparison, fig.height=6, fig.width=6, message=FALSE}
+To compare to the bulk RNASeq data we merge the scRNASeq to  pseudoBulk profiles, 1 for each replicate and convert expression to TPM. We then determine the agreement between the replicates
+```{r bulk_comparison, fig.height=6, fig.width=6,  message=FALSE}
 # separate the scRNA by Rhapsody cartridge from the monocle CDS
 # sum the UMI counts and convert to log(TPM+1)
 
@@ -300,7 +289,8 @@ s.fig1
 ```
 
 ## bulk RNASeq
-```{r}
+Determine the agreement between the bulkRNASeq replicates 
+```{r fig.height=6, fig.width=6}
 fig.cor.bulkRNASeq <- ggpairs(bulk_tpm,
   lower = list(
     continuous = wrap("points",
@@ -317,11 +307,13 @@ s.fig2 <- fig.cor.bulkRNASeq
 saveManuscriptPlot(s.fig2, 8, 8)
 s.fig2
 ```
+
 # scRNASeq v bulkRNASeq
-Comparison of scRNASeq sample to it’s respective bulkRNASeq sample for each of the CHO K1 D12 cultures analysed.
+Comparison of each scRNASeq sample to it’s respective matched bulkRNASeq sample.
 
 ## Map gene IDs
-```{r}
+```{r gene_id_mapping}
+# annotate the genes with biomaRt
 ensembl <- useMart(
   host = "http://sep2019.archive.ensembl.org",
   biomart = "ENSEMBL_MART_ENSEMBL",
@@ -357,6 +349,7 @@ mito.genes <- c(
   "ND1", "ND2", "COX1", "COX2", "ATP8", "ATP6",
   "COX3", "ND3", "ND4L", "ND4", "ND5", "ND6", "CYTB"
 )
+
 mito.ensembl <- c(
   "ENSCGRG00000000006", "ENSCGRG00000000010", "ENSCGRG00000000016", "ENSCGRG00000000019",
   "ENSCGRG00000000021", "ENSCGRG00000000022", "ENSCGRG00000000023", "ENSCGRG00000000025",
@@ -369,8 +362,8 @@ cds_ids <- c(matched_to_cds_symbols$external_gene_name, ensembl_cds, "heavy_chai
 bulk_ids <- c(matched_to_cds_symbols$ensembl_gene_id, ensembl_cds, "heavy_chain", "light_chain", mito.ensembl)
 ```
 
-## Correlation
-```{r}
+## Correlation between single cell and bulk RNASeq data
+```{r scrnaseq_bulk_cor, fig.height=6, fig.width=6}
 # determine the density of points to colour plot
 density_r1 <- densCols(bulk_tpm_r1[bulk_ids], norm_pseudocounts_r1[cds_ids],
   colramp = colorRampPalette(rev(rainbow(10, end = 4 / 6))), nbin = 64
@@ -432,8 +425,8 @@ s.fig3
 The first stage of preprocessing in the Monocle workflow aims to eliminate poor quality cells from further analysis. In this section we calculate metrics to enable filtering of poor quality cells from the analysis - total UMIs, and fraction of UMIs that originate from mitochondrial genes.
 
 ## Filter by Total UMIs
-Cells that have too few UMIs per cells as well as those that have too many UMIs per cell are removed from the analysis
-```{r total_umi, fig.height=4, fig.width=4, fig.cap="Figure", fig.align="center"}
+Cells that have too few UMIs per cells as well as those that have too many UMIs per cell are removed from the analysis.
+```{r total_umi_filter, fig.height=4, fig.width=4}
 # determine the sum of UMIs captured for each cell
 pData(cells)$total.mRNAs <- Matrix::colSums(exprs(cells))
 
@@ -465,7 +458,6 @@ fig.total.mRNA <- ggplot(data = pData(cells)$totalmRNAs, aes(pData(cells)$total.
   ylab("Number of cells") +
   theme_ms() +
   theme(
-  
     axis.text = element_text(size = rel(1)),
     axis.title = element_text(face = "bold", size = rel(1))
   )
@@ -474,9 +466,10 @@ fig1.b <- fig.total.mRNA
 saveManuscriptPlot(fig1.b, 6, 6)
 fig1.b
 ```
+
 ## Filter by mtDNA reads
-A cell with >= 15% of the total UMIs originating from mitochondrial genes is removed
-```{r total_mito, fig.align="center", fig.cap="Figure", fig.height=4, fig.width=4, message=FALSE, warning=FALSE}
+A cell with >= 15% of the total UMIs originating from mitochondrial genes is removed.
+```{r total_mito_filter, fig.height=4, fig.width=4, message=FALSE, warning=FALSE}
 # determine the fraction of UMIs from mito mRNAs
 pData(cells)$mito.mRNAs <- Matrix::colSums(exprs(cells[row.names(subset(
   fData(cells),
@@ -512,7 +505,7 @@ fig1.c
 ```
 
 ## Remove poor quality cells
-```{r filter_cells, fig.align="center", fig.cap="Figure", fig.height=5, fig.width=5, message=FALSE, warning=FALSE}
+```{r filter_cells, fig.height=5, fig.width=5, message=FALSE, warning=FALSE}
 # IDs of cells passing both criteria
 qc_passed_cells <- intersect(mito_mRNA_passed, total_mRNA_passed)
 
@@ -551,7 +544,7 @@ fig.cells.removed <- ggplot(data = qc_df, aes(x = Var1, y = value)) +
   theme(
     legend.title = element_blank(),
     legend.position = (c(.75, .94))
-    #legend.text = element_text(size = 12)
+    # legend.text = element_text(size = 12)
   ) +
   scale_fill_manual(values = c("#3CA437", "#D7263D"), labels = c("Passed", "Removed"))
 
@@ -559,9 +552,10 @@ fig1.d <- fig.cells.removed
 saveManuscriptPlot(fig1.d, 6, 6)
 fig1.d
 ```
+
 ## Filter Genes by expression
 We now remove genes that are not expressed in more than 50 cells in our dataset or the maximum expression is less than 2 UMIs in any cell
-```{r filter_genes, fig.align="center", fig.cap="Figure", fig.height=4, fig.width=4, message=FALSE, warning=FALSE}
+```{r filter_genes, fig.height=4, fig.width=4, message=FALSE, warning=FALSE}
 cells.filter <- estimateSizeFactors(cells.filter)
 
 cells.filter <- estimateDispersions(cells.filter)
@@ -593,7 +587,7 @@ fig.genes.expression <- ggplot(data = pData(cells)$num_genes_expressed, aes(pDat
   xlab("Detected genes") +
   ylab("Number of cells") +
   theme(
-     legend.position = "none",
+    legend.position = "none",
     axis.text = element_text(size = rel(1)),
     axis.title = element_text(face = "bold", size = rel(1))
   )
@@ -601,20 +595,23 @@ fig.genes.expression <- ggplot(data = pData(cells)$num_genes_expressed, aes(pDat
 fig1.e <- fig.genes.expression
 saveManuscriptPlot(fig1.e, 6, 6)
 fig1.e
-```
-### Figure 1
+```  
 
-```{r fig.height=6, fig.width=10}
-
-
-p1 <- (ggplot() + theme_void() + labs(tag="(a)"))/ (ggplot() + theme_void())
-p2 <- (ggplot() + theme_void()) / (ggplot() + theme_void())
-p3 <- (fig1.b + labs(tag="(b)")) / (fig1.d + labs(tag="(d)"))  
-p4 <- (fig1.c + labs(tag="(c)")) /  (fig1.e + labs(tag="(e)")) 
+### Figure 2
+```{r figure_2, fig.height=6, fig.width=10}
+p1 <- (ggplot() +
+  theme_void() +
+  labs(tag = "(a)")) / (ggplot() +
+  theme_void())
+p2 <- (ggplot() +
+  theme_void()) / (ggplot() +
+  theme_void())
+p3 <- (fig1.b + labs(tag = "(b)")) / (fig1.d + labs(tag = "(d)"))
+p4 <- (fig1.c + labs(tag = "(c)")) / (fig1.e + labs(tag = "(e)"))
 
 figure1 <- p1 | p2 | p3 | p4
-#figure1 <- figure1 + plot_annotation(tag_levels = 'a',tag_prefix = "(", tag_suffix = ")") 
-# + plot_annotation(tag_levels = 'a',tag_prefix = "(", tag_suffix = ")") 
+# figure1 <- figure1 + plot_annotation(tag_levels = 'a',tag_prefix = "(", tag_suffix = ")")
+# + plot_annotation(tag_levels = 'a',tag_prefix = "(", tag_suffix = ")")
 saveManuscriptPlot(figure1, 12, 8)
 ```
 
@@ -683,7 +680,7 @@ fData(cells.filter)$gene_short_name[match(annotation$ensembl_gene_id, fData(cell
 For the next section we used the cell cycle scoring function of Seurat to determine which phase of the cell cycles cells were in. Using this function will allow us to correct the effect of cell cycle in subsequent analyses.
 
 ## Create a Seurat object
-```{r create seurat object, message=FALSE, warning=FALSE}
+```{r create_seurat_object, message=FALSE, warning=FALSE}
 # extract the raw counts from the cds and make a Seurat oject containing the batch variable
 cho.obj <- CreateSeuratObject(
   counts = exprs(cells.filter),
@@ -699,7 +696,7 @@ cho.obj <- AddMetaData(
 ```
 ## Preprocess Seurat 
 Before scoring cells by the cell cycle phase any variation due to batch is removed
-```{r normalize data in Seurat, message=FALSE, warning=FALSE, include=FALSE}
+```{r normalize_data_in_seurat, message=FALSE, warning=FALSE, include=FALSE}
 cho.obj <- NormalizeData(cho.obj)
 
 cho.obj <- FindVariableFeatures(cho.obj,
@@ -713,13 +710,13 @@ cho.obj <- ScaleData(cho.obj,
 ```
 ## Specify cell cycle genes
 Here we use custom CHO cell genes involved in cell cycle 
-```{r convert cell cycle genes to CHO gene ids, message=FALSE, warning=FALSE}
+```{r convert_cc_genes_to_CHO, message=FALSE, warning=FALSE}
 s.genes <- read.table("./genelists/cho.s.txt", stringsAsFactors = F)
 
 g2m.genes <- read.table("./genelists/cho.g2m.txt", stringsAsFactors = F)
 ```
 ## Calculate the cell cycle scores
-```{r calculate cell cycle scores with Seurat, fig.height=6, fig.width=12, message=FALSE, warning=FALSE}
+```{r calculate_cc_scores, fig.height=6, fig.width=12, message=FALSE, warning=FALSE}
 # run the seurat cell cycle scoring module
 cho.obj <- CellCycleScoring(cho.obj,
   s.features = s.genes$V1,
@@ -728,15 +725,17 @@ cho.obj <- CellCycleScoring(cho.obj,
 )
 ```
 ## Add cell cycle scores to CDS
-```{r add Seurat cell cycle scores to cds}
+```{r add_cc_scores_to_cds}
 pData(cells.filter)$S.Score <- cho.obj$S.Score
 pData(cells.filter)$G2M.Score <- cho.obj$G2M.Score
 pData(cells.filter)$cc_phase <- cho.obj$Phase
 ``` 
 # tSNE Analysis
+To conduct an exploratory analysis of CHO K1 DP12N1 scRNASeq data we perform an unsupervised dimensionality reduction and visualisation using t-Stocastic neighbour embedding (t-SNE).
 
 ## Identify variable genes
-```{r select_variable_genes, fig.align="center", fig.cap="Figure", fig.height=4, fig.width=4, message=FALSE, warning=FALSE}
+Identify the most variable genes in the scRNASeq dataset.
+```{r select_variable_genes, fig.height=4, fig.width=4, message=FALSE, warning=FALSE}
 options(warn = -1) # suppress warnings that otherwise clutter output
 #' prioritize variable genes for the analysis
 disp_table <- dispersionTable(cells.filter)
@@ -757,9 +756,11 @@ fig.variable.genes <- plot_ordering_genes(cells.filter) +
 fig2.a <- fig.variable.genes
 saveManuscriptPlot(fig2.a, 6, 6)
 fig2.a
-```
-## Select PCs 
-```{r PCA_select_plot, fig.align="center", fig.cap="Figure", fig.height=4, fig.width=4, message=TRUE}
+```  
+
+## Select PCs
+The dimensionality of the single cell expression data was further reduced using principal components analysis (PCA) and following determination of the proportion of variance captured by each component, the first 12 PCs were selected for t-SNE.
+```{r pca_select_plot, fig.align="center", fig.width=4, message=TRUE}
 fig.pc.variance <- plot_pc_variance_explained(cells.filter, return_all = FALSE) +
   geom_vline(xintercept = 12, linetype = "dashed", color = "red", size = 0.5) +
   labs(x = "Principal Component", y = "Variance Explained") +
@@ -769,9 +770,11 @@ fig.pc.variance <- plot_pc_variance_explained(cells.filter, return_all = FALSE) 
 fig2.b <- fig.pc.variance
 saveManuscriptPlot(fig2.b, 6, 6)
 fig2.b
-```
+```  
+
 ## t-Stocastic neighbour embedding
-```{r tSNE_density_plot, fig.align="center", fig.cap="Figure", fig.height=6, fig.width=6, message=FALSE, warning=FALSE}
+To account for potential heterogeneity from technical and biological confounding factors, we corrected the UMI count data prior to t-SNE, ensuring that covariation between multiple factors was removed simultaneously. For technical covariates, possible batch effects arising from use of different cell isolation cartridges as well as differences in the total number of UMIs captured and genes detected per cell were regressed out.
+```{r tsne, fig.height=6, fig.width=6, message=FALSE, warning=FALSE}
 cells.filter <- reduceDimension(cells.filter,
   max_components = 2, num_dim = 12,
   reduction_method = "tSNE",
@@ -781,7 +784,8 @@ cells.filter <- reduceDimension(cells.filter,
 )
 ```
 ## Identify tSNE clusters
-```{r}
+The Monocle densityPeak with parameters rho = 2 & delta = 4 is used to identify subclusters in the data. Note: the t-SNE plot with identified clusters is shown below.
+```{r id_clusters}
 cells.filter <- clusterCells(cells.filter, rho_threshold = 2, delta_threshold = 4, skip_rho_sigma = T)
 
 fig.scatter.rho.delta <- plot_rho_delta(cells.filter, rho_threshold = 2, delta_threshold = 4) +
@@ -790,9 +794,11 @@ fig.scatter.rho.delta <- plot_rho_delta(cells.filter, rho_threshold = 2, delta_t
 fig_s_5 <- fig.scatter.rho.delta
 saveManuscriptPlot(fig_s_5, 6, 6)
 fig_s_5
-```
+```  
+
 ## Effect of CC correction
-```{r}
+Here we show the effect of correcting for cell cycle on the t-SNE visualisation.
+```{r cc_correction_fig}
 cells.filter <- reduceDimension(cells.filter,
   max_components = 2, num_dim = 12,
   reduction_method = "tSNE",
@@ -847,7 +853,8 @@ fig_s_4b
 ```
 
 ## tSNE density
-```{r fig.height=5, fig.width=5}
+Visualiation of cell density in 2D t-SNE plot, show the presence of sub-clusters confirming the presence of transcriptional heterogeneity. 
+```{r tsne_density_plot, fig.height=5, fig.width=5}
 # extract the monocle reduced dimesions
 tsne_coordinates <- t(reducedDimA(cells.filter))
 
@@ -881,9 +888,8 @@ fig2.c
 ```
 
 ## tSNE clusters
-To identify groups  of cells form the tSNE plot we use the louvain method in
-monocle with K=100. Each cluster is assinged a color for reference.
-```{r cluster_identification, fig.align="center", fig.cap="Figure", fig.height=5, fig.width=5}
+To identify groups  of cells form the tSNE plot we use densityPeak algorithm. Each cluster is assinged a color for reference.
+```{r cluster_identification, fig.height=5, fig.width=5}
 fig.tsne.cluster <- plot_cell_clusters(cells.filter, color = "Cluster", cell_size = 0.5) +
   scale_y_continuous(limits = c(-35, 35)) +
   scale_x_continuous(limits = c(-35, 35)) +
@@ -902,13 +908,13 @@ fig2.d <- fig.tsne.cluster
 saveManuscriptPlot(fig2.d, 6, 6)
 
 fig2.d
-```
+```  
+
 ### Figure 2 
-```{r}
-figure2 <- (fig2.a | fig2.b) / (fig2.c | fig2.d) + 
+```{r figure_2_save}
+figure2 <- (fig2.a | fig2.b) / (fig2.c | fig2.d) +
   plot_annotation(tag_levels = "a", tag_prefix = "(", tag_suffix = ")")
 saveManuscriptPlot(figure2, 9, 9)
-
 ```
 
 
@@ -929,6 +935,7 @@ tictoc::toc()
 
 # Anti-IL8 mAb gene expression
 ## bulk RNASeq
+From the bulk RNASeq data we find that both the heavy and light chain were expressed in the top 2% of all genes. The expression of the light chain (median TPM = 7.9) was higher than that of the heavy chain (median TPM = 6.4).
 ```{r mab_expression, fig.height=4, fig.width=10, fig.fullwidth=TRUE, message=FALSE, warning=FALSE}
 mab_genes <- c("heavy_chain", "light_chain")
 
@@ -968,11 +975,13 @@ fig.density.mab.bulk <- bulk_tpm_median %>%
 s_fig5 <- fig.density.mab.bulk
 saveManuscriptPlot(s_fig5, 12, 6)
 s_fig5
-```
+```  
+
 ## scRNASeq
 
 ## HC & LC violin
-```{r}
+Heavy and light chain expression across the population.
+```{r mab_violin}
 # create a relative expression violin plot for the heavy and light chain
 pData(cells.filter)$rel.exprs.hc <- monocle_relative_expression(cells.filter, "heavy_chain")
 pData(cells.filter)$rel.exprs.lc <- monocle_relative_expression(cells.filter, "light_chain")
@@ -1009,7 +1018,8 @@ fig3.b
 ```
 
 ## HC tSNE
-```{r}
+Light expression visualised in the t-SNE space.
+```{r hc_tsne}
 fig.tsne.rel.hc <- plot_cell_clusters(cells.filter, color = "rel.exprs.hc", cell_size = 0.5) +
   color.gradient +
   theme_ms() +
@@ -1032,40 +1042,46 @@ fig3.d
 ```
 
 ## HC cluster expression
-```{r}
+Assessing the difference in heavy chain expession for the t-SNE clusters.
+```{r hc_expression_by_cluster}
 pData(cells.filter) %>%
   group_by(Cluster) %>%
   summarise(`Cell number` = n(), `Median relative HC expression` = median(rel.exprs.hc), `Max. expression` = max(rel.exprs.hc)) %>%
-  DT::datatable(rownames = T,
-  options = list(
-    pagelength = T,
-    scrollX = T,
-    columnDefs = list(list(
-      className = "dt-head-center dt-center",
-      targets = 1:2
-    ))
-  )
-) %>% formatSignif(digits = 2, columns = 3:4)
+  DT::datatable(
+    rownames = T,
+    options = list(
+      pagelength = T,
+      scrollX = T,
+      columnDefs = list(list(
+        className = "dt-head-center dt-center",
+        targets = 1:2
+      ))
+    )
+  ) %>%
+  formatSignif(digits = 2, columns = 3:4)
 
-print(paste("Heavy chain DE q-value for cluster = ",signif(cluster_de["heavy_chain",]$qval,2)),sep="")
+print(paste("Heavy chain DE q-value for cluster = ", signif(cluster_de["heavy_chain", ]$qval, 2)), sep = "")
 
 
 fig.box.hc.cluster <- pData(cells.filter) %>%
-  group_by(Cluster) %>% 
-  ggplot(aes(x=Cluster, y = rel.exprs.hc,fill=Cluster)) +
-  geom_violin(alpha=0.2) +
-  geom_boxplot(alpha=0.5, width=0.2) +
-  scale_y_log10(limits = c(0.5,1e2)) +
-  theme_ms() + 
-  theme(legend.position = "none", 
-        #aspect.ratio = 1, 
-        axis.text = element_text(size = rel(1)), 
-        axis.title = element_text(face = "bold", size = rel(1)),
-        plot.title = element_text(size = rel(1))
+  group_by(Cluster) %>%
+  ggplot(aes(x = Cluster, y = rel.exprs.hc, fill = Cluster)) +
+  geom_violin(alpha = 0.2) +
+  geom_boxplot(alpha = 0.5, width = 0.2) +
+  scale_y_log10(limits = c(0.5, 1e2)) +
+  theme_ms() +
+  theme(
+    legend.position = "none",
+    # aspect.ratio = 1,
+    axis.text = element_text(size = rel(1)),
+    axis.title = element_text(face = "bold", size = rel(1)),
+    plot.title = element_text(size = rel(1))
   ) +
-  labs(y="Relative expression",x="Cluster", title="Heavy Chain") +
-  scale_fill_jcolors("pal8")  +
-  annotate("text",x="2",y=75, label=expression("DE q-value = "*1.6*" \u00D7 "*10^{-53})) 
+  labs(y = "Relative expression", x = "Cluster", title = "Heavy Chain") +
+  scale_fill_jcolors("pal8") +
+  annotate("text", x = "2", y = 75, label = expression("DE q-value = " * 1.6 * " \u00D7 " * 10^{
+    -53
+  }))
 
 fig3.f <- fig.box.hc.cluster
 saveManuscriptPlot(fig3.f, 6, 3)
@@ -1073,10 +1089,10 @@ fig3.f
 ```
 
 ## LC tSNE
-```{r}
-fig.tsne.rel.lc <- plot_cell_clusters(cells.filter, color = "rel.exprs.lc", cell_size = 0.5) + 
- 
-  color.gradient + 
+Light expression visualised in the t-SNE space.
+```{r lc_tsne}
+fig.tsne.rel.lc <- plot_cell_clusters(cells.filter, color = "rel.exprs.lc", cell_size = 0.5) +
+  color.gradient +
   theme_ms() +
   theme(
     panel.grid.major = element_blank(),
@@ -1094,42 +1110,49 @@ fig.tsne.rel.lc <- plot_cell_clusters(cells.filter, color = "rel.exprs.lc", cell
 fig3.e <- fig.tsne.rel.lc
 saveManuscriptPlot(fig3.e, 6, 6)
 fig3.e
-```
-## HC cluster expression
-```{r}
+```  
+
+## LC cluster expression
+Assessing the difference in heavy chain expession for the t-SNE clusters.
+```{r lc_expression_by_cluster}
 pData(cells.filter) %>%
   group_by(Cluster) %>%
   summarise(`Cell number` = n(), `Median relative LC expression` = median(rel.exprs.lc), `Max. expression` = max(rel.exprs.lc)) %>%
-  DT::datatable(rownames = T,
-  options = list(
-    pagelength = T,
-    scrollX = T,
-    columnDefs = list(list(
-      className = "dt-head-center dt-center",
-      targets = 1:2
-    ))
-  )
-) %>% formatSignif(digits = 2, columns = 3:4)
+  DT::datatable(
+    rownames = T,
+    options = list(
+      pagelength = T,
+      scrollX = T,
+      columnDefs = list(list(
+        className = "dt-head-center dt-center",
+        targets = 1:2
+      ))
+    )
+  ) %>%
+  formatSignif(digits = 2, columns = 3:4)
 
-print(paste("Light chain DE q-values for cluster = ",signif(cluster_de["light_chain",]$qval,2)),sep="")
+print(paste("Light chain DE q-values for cluster = ", signif(cluster_de["light_chain", ]$qval, 2)), sep = "")
 
 
 fig.box.lc.cluster <- pData(cells.filter) %>%
-  group_by(Cluster) %>% 
-  ggplot(aes(x=Cluster, y = rel.exprs.lc,fill=Cluster)) +
-  geom_violin(alpha=0.2) +
-  geom_boxplot(alpha=0.5, width=0.2) +
-  scale_y_log10(limits = c(0.5,1e2)) +
-  theme_ms() + 
-  theme(legend.position = "none", 
-        #aspect.ratio = 1, 
-        axis.text = element_text(size = rel(1)), 
-        axis.title = element_text(face = "bold", size = rel(1)),
-        plot.title = element_text(size = rel(1))
+  group_by(Cluster) %>%
+  ggplot(aes(x = Cluster, y = rel.exprs.lc, fill = Cluster)) +
+  geom_violin(alpha = 0.2) +
+  geom_boxplot(alpha = 0.5, width = 0.2) +
+  scale_y_log10(limits = c(0.5, 1e2)) +
+  theme_ms() +
+  theme(
+    legend.position = "none",
+    # aspect.ratio = 1,
+    axis.text = element_text(size = rel(1)),
+    axis.title = element_text(face = "bold", size = rel(1)),
+    plot.title = element_text(size = rel(1))
   ) +
-  labs(y="Relative expression",x="Cluster", title="Light Chain") +
-  scale_fill_jcolors("pal8")  +
-  annotate("text",x="2",y=75, label=expression("DE q-value = "*1.3*" \u00D7 "*10^{-36})) 
+  labs(y = "Relative expression", x = "Cluster", title = "Light Chain") +
+  scale_fill_jcolors("pal8") +
+  annotate("text", x = "2", y = 75, label = expression("DE q-value = " * 1.3 * " \u00D7 " * 10^{
+    -36
+  }))
 
 fig3.g <- fig.box.lc.cluster
 saveManuscriptPlot(fig3.g, 6, 3)
@@ -1137,23 +1160,24 @@ fig3.g
 ```
 
 ### Figure 3
-```{r fig.height=9, fig.width=9}
-p1 <- ggplot() + theme_void() | fig3.b | fig2.d  + theme(legend.position = "right")
-p2 <- fig3.f/ fig3.g
-  
-p3 <-  fig3.d +theme(legend.position = "bottom") | fig3.e +theme(legend.position = "bottom") | p2 
+Create and save figure 3 for the manuscript.
+```{r figure_3_save, fig.height=9, fig.width=9}
+p1 <- fig3.b | fig2.d + theme(legend.position = "right")
+p2 <- fig3.f / fig3.g
+p3 <- fig3.d + theme(legend.position = "right") | fig3.e + theme(legend.position = "right")
 
-figure3 <- p1 / p3 + plot_annotation(tag_levels = "a", tag_prefix = "(", tag_suffix = ")")
-saveManuscriptPlot(figure3,16,9)
+
+p4 <- p1 / p2 / p3
+figure3 <- p4 + plot_annotation(tag_levels = "a", tag_prefix = "(", tag_suffix = ")")
+saveManuscriptPlot(figure3, 9, 12)
 ```
 
 
 # Trajectory analysis
 ## Construct trajectory 
-using the genes found to vary beteen the identified clusters we first project
-onto a 2D space using the DDRTree algorithm before ording the cells in
+Using the genes found to vary beteen the identified clusters we first project onto a 2D space using the DDRTree algorithm before ording the cells in
 pseduotime
-```{r generate_monocle_trajectory, warning=FALSE, fig.cap="Figure", fig.align="center"}
+```{r generate_monocle_trajectory, warning=FALSE}
 de_genes <- cluster_de %>%
   arrange(qval) %>%
   filter(qval < 0.01)
@@ -1172,22 +1196,27 @@ cells.filter <- orderCells(cells.filter)
 # cell states are assigned arbitrary numbers, here we reassign #
 # to read left to right in the trajectory plot
 pData(cells.filter)$State <- mapvalues(pData(cells.filter)$State,
-                                      from = c("6", "7", "5", "4", 
-                                               "8", "3", "2", "9", "1"),
-                                        to = c("1", "2", "3", "4", 
-                                               "5", "6", "7", "8", "9")
-                                      )
+  from = c(
+    "6", "7", "5", "4",
+    "8", "3", "2", "9", "1"
+  ),
+  to = c(
+    "1", "2", "3", "4",
+    "5", "6", "7", "8", "9"
+  )
+)
 
 pData(cells.filter)$State <- factor(pData(cells.filter)$State,
-                                     levels = c("1", "2", "3", "4", "5", "6", "7", "8", "9")
-                                    )
+  levels = c("1", "2", "3", "4", "5", "6", "7", "8", "9")
+)
 
 fig.trajectory.state <- plot_cell_trajectory(cells.filter,
   theta = 0,
   show_branch_points = FALSE,
   color_by = "State",
-  cell_size = 0.5) +
-  labs(x = "Component 1", y = "Component 2", title="Monocle trajectory") +
+  cell_size = 0.5
+) +
+  labs(x = "Component 1", y = "Component 2", title = "Monocle trajectory") +
   guides(color = guide_legend(override.aes = list(size = 5))) +
   theme_ms() +
   scale_x_reverse() + # we reverse the direction of the x-axis so that State 1 is at the left
@@ -1201,7 +1230,7 @@ fig.trajectory.state <- plot_cell_trajectory(cells.filter,
 # modify the transperancy of the cells on the plot
 # fig.trajectory.state <- ggplot_build(fig.trajectory.state)
 # fig.trajectory.state$data[[2]]$alpha <- 0.3
-# 
+#
 # fig.trajectory.state <- ggplot_gtable(fig.trajectory.state)
 fig5.a <- fig.trajectory.state
 saveManuscriptPlot(fig5.a, 8, 4)
@@ -1214,7 +1243,7 @@ fig.bar.state.cells <- pData(cells.filter) %>%
   ggplot(aes(x = State, y = num_cells, fill = State)) +
   geom_text(aes(label = num_cells), position = position_dodge(width = 0.9), vjust = -0.25) +
   geom_bar(alpha = 1, stat = "identity") +
-  ylim(c(0,1050)) +
+  ylim(c(0, 1050)) +
   theme(legend.position = "none") +
   theme_ms() +
   theme(
@@ -1228,60 +1257,52 @@ fig.bar.state.cells <- pData(cells.filter) %>%
 fig5.b <- fig.bar.state.cells
 saveManuscriptPlot(fig5.b, 6, 6)
 fig5.b
-```
+```  
+
 ## Median relative HC & LC in each cell state
-```{r}
+```{r mab_violin_state}
 pData(cells.filter) %>%
   group_by(State) %>%
   summarise(`Cell number` = n(), `Median relative HC expression` = median(rel.exprs.hc), `Max. expression` = max(rel.exprs.hc)) %>%
-  DT::datatable(rownames = T,
-  options = list(
-    pagelength = T,
-    scrollX = T,
-    columnDefs = list(list(
-      className = "dt-head-center dt-center",
-      targets = 1:2
-    ))
-  )
-) %>% formatSignif(digits = 2, columns = 3:4)
+  DT::datatable(
+    rownames = T,
+    options = list(
+      pagelength = T,
+      scrollX = T,
+      columnDefs = list(list(
+        className = "dt-head-center dt-center",
+        targets = 1:2
+      ))
+    )
+  ) %>%
+  formatSignif(digits = 2, columns = 3:4)
 
 pData(cells.filter) %>%
   group_by(State) %>%
   summarise(`Cell number` = n(), `Median relative LC expression` = median(rel.exprs.lc), `Max. expression` = max(rel.exprs.lc)) %>%
-  DT::datatable(rownames = T,
-  options = list(
-    pagelength = T,
-    scrollX = T,
-    columnDefs = list(list(
-      className = "dt-head-center dt-center",
-      targets = 1:2
-    ))
-  )
-) %>% formatSignif(digits = 2, columns = 3:4)
+  DT::datatable(
+    rownames = T,
+    options = list(
+      pagelength = T,
+      scrollX = T,
+      columnDefs = list(list(
+        className = "dt-head-center dt-center",
+        targets = 1:2
+      ))
+    )
+  ) %>%
+  formatSignif(digits = 2, columns = 3:4)
 ```
 
-
-## Differential expression of LC & HC 
-```{r}
-j<-1
-for (i in 2:9) {
-state_diff_expression <- list()
-state_diff_expression[[j]]<- differentialGeneTest(cells.filter[, pData(cells.filter)$State %in% c(1, 2)], 
-                                        fullModelFormulaStr = "~batch + num_genes_expressed + total.mRNAs + S.Score + G2M.Score + State",
-                                        reducedModelFormulaStr = "~batch + num_genes_expressed + total.mRNAs + S.Score + G2M.Score",
-                                        cores = detectCores())
-j<-j+1
-}
-```
 
 ## HC state expression
-```{r}
+```{r hc_violin_state}
 fig.box.hc.state <- pData(cells.filter) %>%
   group_by(State) %>%
   ggplot(aes(x = State, y = rel.exprs.hc, fill = State)) +
   geom_violin(alpha = 0.2) +
   geom_boxplot(alpha = 1, width = 0.15) +
-  scale_y_log10(limits = c(0.5,1e2)) +
+  scale_y_log10(limits = c(0.5, 1e2)) +
   theme_ms() +
   theme(
     legend.position = "none",
@@ -1296,7 +1317,7 @@ fig.box.hc.state <- pData(cells.filter) %>%
     method = "wilcox.test",
     ref.group = "1",
     hide.ns = TRUE,
-    size=7
+    size = 7
   ) +
   scale_fill_manual(values = colour.set)
 
@@ -1306,7 +1327,7 @@ fig5.c
 ```
 
 ## HC trajectory
-```{r message=FALSE, warning=FALSE}
+```{r hc_trajectory, message=FALSE, warning=FALSE}
 # overlay the heavy chain expression on the trajectory plot
 fig.trajectory.rel.hc <- plot_cell_trajectory(cells.filter,
   theta = 0,
@@ -1331,19 +1352,19 @@ fig5.e
 ```
 
 ## LC state expression
-```{r}
+```{r lc_violin_state}
 # relative expression of the light chain in each cell state
 fig.box.lc.state <- pData(cells.filter) %>%
   group_by(State) %>%
   ggplot(aes(x = State, y = rel.exprs.lc, fill = State)) +
   geom_violin(alpha = 0.2) +
   geom_boxplot(alpha = 1, width = 0.15) +
-  scale_y_log10(limits = c(0.5,1e2)) +
+  scale_y_log10(limits = c(0.5, 1e2)) +
   theme(legend.position = "none") +
   theme_ms() +
   theme(
     legend.position = "none",
-  
+
     axis.text = element_text(size = rel(1)),
     axis.title = element_text(face = "bold", size = rel(1)),
     plot.title = element_text(size = rel(1))
@@ -1354,9 +1375,9 @@ fig.box.lc.state <- pData(cells.filter) %>%
     label = "p.signif",
     method = "wilcox.test",
     ref.group = "1",
-    hide.ns = TRUE, 
-    size=7,
-    color="black"
+    hide.ns = TRUE,
+    size = 7,
+    color = "black"
   ) +
   scale_fill_manual(values = colour.set)
 
@@ -1366,7 +1387,7 @@ fig5.d
 ```
 
 ## LC trajectory
-```{r}
+```{r lc_trajectory}
 # overlay the light chain expression on the trajectory plot
 fig.trajectory.rel.lc <- plot_cell_trajectory(cells.filter,
   theta = 0,
@@ -1391,18 +1412,20 @@ fig5.f
 ```
 
 ### Figure 5
-```{r fig.height=12, fig.width=10}
-p1 <- (fig5.a + labs(tag="(a)")) / (fig5.e + labs(tag="(c)")) / (fig5.f + labs(tag="(e)"))   
-p2 <-  (fig5.b + labs(tag="(b)")) / (fig5.c + labs(tag="(d)")) / (fig5.d + labs(tag="(f)"))
+Create and save figure 5 in the manuscript.
+```{r figure_5_save, fig.height=12, fig.width=10}
+p1 <- (fig5.a + labs(tag = "(a)")) / (fig5.e + labs(tag = "(c)")) / (fig5.f + labs(tag = "(e)"))
+p2 <- (fig5.b + labs(tag = "(b)")) / (fig5.c + labs(tag = "(d)")) / (fig5.d + labs(tag = "(f)"))
 
 figure5 <- p1 | p2 + plot_annotation(tag_levels = "a", tag_prefix = "(", tag_suffix = ")")
-saveManuscriptPlot(figure5,16,11)
+saveManuscriptPlot(figure5, 16, 11)
 ```
 
 
 # Expression of CHO genes along trajectory
 
-## Pseudotime
+## Set the root of the Monocle trajectory
+Cell state 1 is set as the root or beginning of the trajectory
 ```{r traj_plot_pseudotime}
 # set the root state
 cells.filter <- orderCells(cells.filter, root_state = 1)
@@ -1413,7 +1436,7 @@ fig.trajectory.pseudotime <- plot_cell_trajectory(cells.filter,
   show_branch_points = FALSE,
   cell_size = 0.5
 ) +
-  labs(x = "Component 1", y = "Component 2", title="Monocle pseudotime") +
+  labs(x = "Component 1", y = "Component 2", title = "Monocle pseudotime") +
   scale_color_viridis_c(option = "D") +
   theme_ms() +
   theme(
@@ -1423,27 +1446,26 @@ fig.trajectory.pseudotime <- plot_cell_trajectory(cells.filter,
     axis.title = element_text(face = "bold", size = rel(1))
   ) +
   scale_x_reverse()
-# guides(color = guide_legend(override.aes = list(size = 5)))
 
 fig6.a <- fig.trajectory.pseudotime
 saveManuscriptPlot(fig6.a, 7, 3)
 
 fig6.a
-```
+```  
+
 ## Pseudotime differential expression
-Those genes that significantly vary with Pseudotime are identified 
-```{r monocle_pseudotime_de, message=TRUE, warning=FALSE, fig.cap="Figure", fig.align="center"}
-tictoc::tic()
+Identification of genes that correlated with Pseudotime. Those genes found to have a qval < 0.01 using the Monocle `differentialGeneTest` function were considered significant
+```{r monocle_pseudotime_de, message=TRUE, warning=FALSE}
 pseudotime_de <- differentialGeneTest(cells.filter,
   fullModelFormulaStr = "~batch + num_genes_expressed + total.mRNAs + S.Score + G2M.Score + sm.ns(Pseudotime, df = 3)",
   reducedModelFormulaStr = "~batch + num_genes_expressed + total.mRNAs + S.Score + G2M.Score",
   cores = 32
 )
-tictoc::toc()
 
+# select significant genes
 pseudotime_de <- pseudotime_de[pseudotime_de$qval < 0.01, ]
 
-# save the results
+# save the results for Table S3
 table.s3 <- pseudotime_de %>%
   arrange(qval) %>%
   dplyr::select(type, gene_short_name, num_cells_expressed, max.expression, pval, qval) %>%
@@ -1466,7 +1488,7 @@ write_xlsx(list(pseudotime_de = table.s3),
 ```
 
 ## Cluster analysis
-```{r}
+```{r trajectory_cluster}
 cluster_number <- 5
 
 fig.heatmap.pseudotime <- plot_pseudotime_heatmap(cells.filter[rownames(pseudotime_de), ],
@@ -1483,15 +1505,16 @@ saveManuscriptPlot(fig6.b, 6, 6)
 fig6.b
 ```
 
-## Enrichment analysis
-```{r message=FALSE, warning=FALSE, paged.print=TRUE}
+## Enrichment analysis  
+Use WebGestaltR to determine if the identified clusters of genes are enriched when compared to GO. Those biological processes with a Benjamini Hochberg adjusted p-value < 0.05 were considered significantly enriched.
+```{r enrichment_analysis, message=FALSE, warning=FALSE, include=FALSE, paged.print=TRUE}
 # extract the genes in each cluster of the Pseudotime heatmap
 pseudotime_hm_clusters <- as.data.frame(cutree(fig.heatmap.pseudotime$tree_row, k = cluster_number)) # first cut the dendrogram
 
 pseudotime_hm_clusters$Gene <- rownames(pseudotime_hm_clusters) # get the geneids
 
 pseudotime_hm_clusters$short_name <- fData(cells.filter)$gene_short_name[rownames(fData(cells.filter))
-                                      %in% pseudotime_hm_clusters$Gene] # get the corresponding short names
+%in% pseudotime_hm_clusters$Gene] # get the corresponding short names
 
 colnames(pseudotime_hm_clusters) <- c("Cluster", "Gene", "short_name")
 
@@ -1540,7 +1563,7 @@ enrich_result <- WebGestaltRBatch(
   nThreads = 32
 )
 
-# write the supplementary table S4
+# create the supplementary table S4 for the clusters with enrichment
 fn <- paste("tables/Table S4.xlsx", sep = "")
 suppressMessages(if (file.exists(fn)) {
   file.remove(fn)
@@ -1571,6 +1594,7 @@ datatable(enrich_result[[1]]$enrichResult[, c(1, 2, 4, 5, 7, 8, 9)],
   )
 ) %>% formatSignif(digits = 2, columns = 5:7)
 ```
+
 ### Cluster 2
 ```{r cluster2_enrichment}
 datatable(enrich_result[[2]]$enrichResult[, c(1, 2, 4, 5, 8, 9)],
@@ -1588,127 +1612,126 @@ datatable(enrich_result[[2]]$enrichResult[, c(1, 2, 4, 5, 8, 9)],
 ```
 
 ## CHO cell gene expression {.tabset .tabset-fade .tabset-pills}
+Overlay the expression of genes found to significantly correlate with the progression of cells along the trajectory. 
 
 ### Psap
-```{r}
+Plot the expression of the **Prosaposin** gene 
+```{r psap_plot}
 # relative expression
 pData(cells.filter)$rel.exprs.psap <- monocle_relative_expression(cells.filter, "Psap")
 
-fig.traj.rel.psap <- plot_cell_trajectory(cells.filter, 
-                                              theta = 0, 
-                                              show_branch_points = FALSE, 
-                                              color_by = "rel.exprs.psap", 
-                                              cell_size = 0.5) +
-                                              color.gradient + 
-                                              labs(x = "Component 1", 
-                                                   y = "Component 2",
-                                                   title = "Psap",
-                                                   color="Relative\nexpression") +
-                                              theme_ms() +
-  theme(legend.position = "right",
-        axis.text = element_text(size = rel(1)), 
+fig.traj.rel.psap <- plot_cell_trajectory(cells.filter,
+  theta = 0,
+  show_branch_points = FALSE,
+  color_by = "rel.exprs.psap",
+  cell_size = 0.5
+) +
+  color.gradient +
+  labs(
+    x = "Component 1",
+    y = "Component 2",
+    title = "Psap",
+    color = "Relative\nexpression"
+  ) +
+  theme_ms() +
+  theme(
+    legend.position = "right",
+    axis.text = element_text(size = rel(1)),
     axis.title = element_text(face = "bold", size = rel(1)),
-    plot.title = element_text(size = rel(1))) +
+    plot.title = element_text(size = rel(1))
+  ) +
   scale_x_reverse()
-                                              
+
 
 fig6.c <- fig.traj.rel.psap
 saveManuscriptPlot(fig6.c, 7, 3)
 fig6.c
-```
-### Tomm20
-```{r}
-# relative expression
-pData(cells.filter)$rel.exprs.tomm20 <- monocle_relative_expression(cells.filter, "Tomm20")
+```  
 
-fig.traj.rel.tomm20 <- plot_cell_trajectory(cells.filter, 
-                                              theta = 0, 
-                                              show_branch_points = FALSE, 
-                                              color_by = "rel.exprs.tomm20", 
-                                              cell_size = 0.5) +
-                                              color.gradient + 
-                                              labs(x = "Component 1", 
-                                                   y = "Component 2",
-                                                   title="Tomm20",
-                                                   color="Relative\nexpression") +
-                                              theme_ms() +
-                                             theme(legend.position = "right",
-        axis.text = element_text(size = rel(1)), 
-    axis.title = element_text(face = "bold", size = rel(1)),
-    plot.title = element_text(size = rel(1))) +
-  scale_x_reverse()
-
-fig6.d <- fig.traj.rel.tomm20
-saveManuscriptPlot(fig6.d, 7, 3)
-fig6.d
-```
 ### Hmox1
-```{r}
+Plot the expression of the **Heme oxygenase 1** gene 
+```{r hmox_plot}
 # relative expression
 pData(cells.filter)$rel.exprs.hmox1 <- monocle_relative_expression(cells.filter, "Hmox1")
 
-fig.traj.rel.hmox1 <- plot_cell_trajectory(cells.filter, 
-                                              theta = 0, 
-                                              show_branch_points = FALSE, 
-                                              color_by = "rel.exprs.hmox1", 
-                                              cell_size = 0.5) +
-                                              color.gradient + 
-                                              labs(x = "Component 1", 
-                                                   y = "Component 2",
-                                                   title = "Hmox1",
-                                                   color="Relative\nexpression") +
-                                              theme_ms() +
-  theme(legend.position = "right",
-        axis.text = element_text(size = rel(1)), 
+fig.traj.rel.hmox1 <- plot_cell_trajectory(cells.filter,
+  theta = 0,
+  show_branch_points = FALSE,
+  color_by = "rel.exprs.hmox1",
+  cell_size = 0.5
+) +
+  color.gradient +
+  labs(
+    x = "Component 1",
+    y = "Component 2",
+    title = "Hmox1",
+    color = "Relative\nexpression"
+  ) +
+  theme_ms() +
+  theme(
+    legend.position = "right",
+    axis.text = element_text(size = rel(1)),
     axis.title = element_text(face = "bold", size = rel(1)),
-    plot.title = element_text(size = rel(1))) +
+    plot.title = element_text(size = rel(1))
+  ) +
   scale_x_reverse()
-                                            
+
 
 fig6.e <- fig.traj.rel.hmox1
 saveManuscriptPlot(fig6.e, 7, 3)
 fig6.e
-```
+```  
+
 ### Fth1
-```{r}
+Plot the expression of the **Ferritin 1 heavy chain 1** gene 
+```{r fth_plot}
 # relative expression
 pData(cells.filter)$rel.exprs.fth1 <- monocle_relative_expression(cells.filter, "Fth1")
 
-fig.traj.rel.fth1 <- plot_cell_trajectory(cells.filter, 
-                                              theta = 0, 
-                                              show_branch_points = FALSE, 
-                                              color_by = "rel.exprs.fth1", 
-                                              cell_size = 0.5) +
-                                              color.gradient + 
-                                              labs(x = "Component 1", 
-                                                   y = "Component 2",
-                                                   title = "Fth1",
-                                                   color="Relative\nexpression") +
-                                              theme_ms() +
-  theme(legend.position = "right",
-        axis.text = element_text(size = rel(1)), 
+fig.traj.rel.fth1 <- plot_cell_trajectory(cells.filter,
+  theta = 0,
+  show_branch_points = FALSE,
+  color_by = "rel.exprs.fth1",
+  cell_size = 0.5
+) +
+  color.gradient +
+  labs(
+    x = "Component 1",
+    y = "Component 2",
+    title = "Fth1",
+    color = "Relative\nexpression"
+  ) +
+  theme_ms() +
+  theme(
+    legend.position = "right",
+    axis.text = element_text(size = rel(1)),
     axis.title = element_text(face = "bold", size = rel(1)),
-    plot.title = element_text(size = rel(1))) +
+    plot.title = element_text(size = rel(1))
+  ) +
   scale_x_reverse()
-                                              
+
 
 fig6.f <- fig.traj.rel.fth1
 saveManuscriptPlot(fig6.f, 7, 3)
 fig6.f
 ```
 
-### Figure 6
-```{r}
-p1 <- (fig6.a + labs(tag="(a)")) / (ggplot() + theme_void() + labs(tag="(b)")) / (ggplot() + theme_void()) / (ggplot() + theme_void()) / (ggplot() + theme_void())
-p2 <- (fig6.c + labs(tag="(c)")) / (fig6.d + labs(tag="(d)")) / (fig6.e + labs(tag="(e)")) / (fig6.f + labs(tag="(f)"))
+#### Figure 6
+Create and save figure 6 in the manuscript.
+```{r figure_6_save}
+p1 <- (fig6.a + labs(tag = "(a)")) / (ggplot() +
+  theme_void() +
+  labs(tag = "(b)")) / (ggplot() +
+  theme_void()) / (ggplot() +
+  theme_void()) / (ggplot() +
+  theme_void())
+p2 <- (fig6.f + labs(tag = "(c)")) / (fig6.e + labs(tag = "(d)")) / (fig6.c + labs(tag = "(e)"))
 
-figure6 <- p1 |  p2 
-
-saveManuscriptPlot(figure6,12,10)
+figure6 <- p1 | p2
+saveManuscriptPlot(figure6, 12, 10)
 ```
 
-
 # Session info
-```{r}
+```{r session}
 devtools::session_info()
 ```
